@@ -4,7 +4,6 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   CircleAlert,
   ClipboardList,
@@ -22,7 +21,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContextSelector } from "@/components/context-selector";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
 
 const navItems = [
   { label: "Resumen", icon: Landmark, active: true },
@@ -105,18 +106,7 @@ export default function Home() {
               </div>
             </details>
             <div className="grid size-9 place-items-center rounded-xl bg-[#14352d] text-sm font-bold text-white lg:hidden">PX</div>
-            <details className="relative hidden lg:block">
-              <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
-                <Building2 size={16} className="text-[#14352d]" /> Firma completa <ChevronDown size={15} className="text-stone-400" />
-              </summary>
-              <div className="absolute left-0 top-11 z-30 w-80 rounded-xl border border-stone-200 bg-white p-2 shadow-xl">
-                <p className="px-2 py-1.5 text-xs font-medium text-stone-500">Contexto de trabajo</p>
-                <button className="flex w-full items-center gap-3 rounded-lg bg-[#e7f0e9] px-3 py-2.5 text-left" type="button"><Landmark size={17} className="text-[#14352d]" /><span><span className="block text-sm font-medium text-[#14352d]">Firma completa</span><span className="block text-xs text-emerald-800">Todas las empresas y tareas</span></span></button>
-                <button className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-stone-100" type="button"><Building2 size={17} className="text-stone-500" /><span><span className="block text-sm font-medium">Distribuidora El Roble, C.A.</span><span className="block text-xs text-stone-500">Sin sucursales</span></span></button>
-                <button className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-stone-100" type="button"><Building2 size={17} className="text-stone-500" /><span><span className="block text-sm font-medium">Inversiones Costa Azul, C.A.</span><span className="block text-xs text-stone-500">1 sucursal · seleccionar al entrar</span></span></button>
-                <p className="px-2 pb-1 pt-2 text-[11px] leading-4 text-stone-400">La sucursal solo se solicita si la empresa la utiliza.</p>
-              </div>
-            </details>
+            <ContextSelector />
             <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 xl:flex">
               <Search size={16} />
               <span>Buscar empresa, cliente o tarea...</span>
@@ -130,7 +120,7 @@ export default function Home() {
             </button>
             <ThemeToggle />
             <div className="h-7 w-px bg-stone-200" />
-            <Avatar className="size-9"><AvatarFallback className="bg-[#dbe8df] text-xs font-semibold text-[#14352d]">LU</AvatarFallback></Avatar>
+            <UserMenu />
           </div>
         </header>
 

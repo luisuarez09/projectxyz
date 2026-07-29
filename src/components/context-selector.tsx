@@ -11,7 +11,7 @@ const companies = [
   { name: "Servicios Maracay, C.A.", business: "Servicios profesionales" },
 ];
 
-export function ContextSelector() {
+export function ContextSelector({ mobile = false }: { mobile?: boolean }) {
   const { isOpen, ref, setIsOpen } = useDismissableMenu<HTMLDivElement>();
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState("Firma completa");
@@ -36,11 +36,11 @@ export function ContextSelector() {
   }
 
   return (
-    <div className="relative hidden lg:block" ref={ref}>
-      <button aria-expanded={isOpen} className="flex h-9 max-w-55 cursor-pointer items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800" onClick={() => setIsOpen((open) => !open)} type="button">
-        <Building2 size={16} className="shrink-0 text-[#14352d] dark:text-emerald-300" /> <span className="truncate">{selected}</span><ChevronDown size={15} className="shrink-0 text-stone-400" />
+    <div className={`relative ${mobile ? "lg:hidden" : "hidden lg:block"}`} ref={ref}>
+      <button aria-expanded={isOpen} aria-label="Seleccionar empresa" className={`flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800 ${mobile ? "justify-center px-2" : "max-w-55 px-3"}`} onClick={() => setIsOpen((open) => !open)} type="button">
+        <Building2 size={16} className="shrink-0 text-[#14352d] dark:text-emerald-300" /> {!mobile && <><span className="truncate">{selected}</span><ChevronDown size={15} className="shrink-0 text-stone-400" /></>}
       </button>
-      {isOpen && <div className="absolute left-0 top-11 z-30 w-88 rounded-xl border border-stone-200 bg-white p-2 shadow-xl dark:border-stone-700 dark:bg-stone-900">
+      {isOpen && <div className={`${mobile ? "fixed inset-x-3 top-16" : "absolute left-0 top-11 w-88"} z-40 rounded-xl border border-stone-200 bg-white p-2 shadow-xl dark:border-stone-700 dark:bg-stone-900`}>
         <p className="px-2 py-1.5 text-xs font-medium text-stone-500 dark:text-stone-400">Contexto de trabajo</p>
         <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${selected === "Firma completa" ? "bg-[#e7f0e9] dark:bg-emerald-950" : "hover:bg-stone-100 dark:hover:bg-stone-800"}`} onClick={() => selectCompany("Firma completa")} type="button">
           <Landmark size={17} className="text-[#14352d] dark:text-emerald-300" /><span><span className="block text-sm font-medium text-[#14352d] dark:text-emerald-100">Firma completa</span><span className="block text-xs text-emerald-800 dark:text-emerald-300">Todas las empresas y tareas</span></span>

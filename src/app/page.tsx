@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContextSelector } from "@/components/context-selector";
 import { NotificationMenu } from "@/components/notification-menu";
+import { MobileSearch } from "@/components/mobile-search";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 
@@ -85,8 +86,8 @@ export default function Home() {
       </aside>
 
       <section className="lg:pl-64">
-        <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-stone-200 bg-[#f7f7f4]/90 px-5 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90 lg:px-10">
-          <div className="flex items-center gap-3">
+        <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-stone-200 bg-[#f7f7f4]/90 px-3 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90 sm:px-5 lg:px-10">
+          <div className="flex items-center gap-2 sm:gap-3">
             <details className="group relative lg:hidden">
               <summary className="grid size-9 cursor-pointer list-none place-items-center rounded-lg text-stone-600 hover:bg-stone-200 [&::-webkit-details-marker]:hidden" aria-label="Abrir menú de navegación">
                 <Menu size={21} />
@@ -106,6 +107,8 @@ export default function Home() {
               </div>
             </details>
             <div className="grid size-9 place-items-center rounded-xl bg-[#14352d] text-sm font-bold text-white lg:hidden">PX</div>
+            <ContextSelector mobile />
+            <MobileSearch />
             <ContextSelector />
             <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 dark:border-stone-700 dark:bg-stone-900 xl:flex">
               <Search size={16} />
@@ -113,10 +116,10 @@ export default function Home() {
               <kbd className="ml-16 rounded border border-stone-200 px-1.5 py-0.5 text-[10px]">⌘ K</kbd>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 sm:gap-3">
             <NotificationMenu />
-            <ThemeToggle />
-            <div className="h-7 w-px bg-stone-200" />
+            <div className="hidden sm:block"><ThemeToggle /></div>
+            <div className="hidden h-7 w-px bg-stone-200 sm:block dark:bg-stone-700" />
             <UserMenu />
           </div>
         </header>

@@ -1,0 +1,19 @@
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local files
+*.log
+.DS_Store
+Thumbs.db
+
+# Prisma local development database
+prisma/*.db
+prisma/*.db-journal

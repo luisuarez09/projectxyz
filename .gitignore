@@ -3,6 +3,7 @@ node_modules/
 .next/
 out/
 coverage/
+.npm-cache/
 
 # Environment and secrets
 .env

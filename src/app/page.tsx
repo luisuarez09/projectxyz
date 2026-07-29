@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   CircleAlert,
   ClipboardList,
@@ -21,6 +22,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
   { label: "Resumen", icon: Landmark, active: true },
@@ -51,8 +53,8 @@ const statusClass: Record<string, string> = {
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#f7f7f4] text-stone-900">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-stone-200 bg-white px-4 py-5 lg:flex">
+    <main className="min-h-screen bg-[#f7f7f4] text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-stone-200 bg-white px-4 py-5 dark:border-stone-800 dark:bg-stone-900 lg:flex">
         <div className="mb-10 flex items-center gap-3 px-2">
           <div className="grid size-9 place-items-center rounded-xl bg-[#14352d] text-sm font-bold text-white">PX</div>
           <div>
@@ -64,7 +66,7 @@ export default function Home() {
         <nav className="space-y-1" aria-label="Navegación principal">
           {navItems.map(({ label, icon: Icon, active }) => (
             <button
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${active ? "bg-[#e7f0e9] font-medium text-[#14352d]" : "text-stone-600 hover:bg-stone-100"}`}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${active ? "bg-[#e7f0e9] font-medium text-[#14352d] dark:bg-emerald-950 dark:text-emerald-100" : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"}`}
               key={label}
               type="button"
             >
@@ -82,7 +84,7 @@ export default function Home() {
       </aside>
 
       <section className="lg:pl-64">
-        <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-stone-200 bg-[#f7f7f4]/90 px-5 backdrop-blur lg:px-10">
+        <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-stone-200 bg-[#f7f7f4]/90 px-5 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90 lg:px-10">
           <div className="flex items-center gap-3">
             <details className="group relative lg:hidden">
               <summary className="grid size-9 cursor-pointer list-none place-items-center rounded-lg text-stone-600 hover:bg-stone-200 [&::-webkit-details-marker]:hidden" aria-label="Abrir menú de navegación">
@@ -103,7 +105,19 @@ export default function Home() {
               </div>
             </details>
             <div className="grid size-9 place-items-center rounded-xl bg-[#14352d] text-sm font-bold text-white lg:hidden">PX</div>
-            <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 md:flex">
+            <details className="relative hidden lg:block">
+              <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 hover:bg-stone-50 [&::-webkit-details-marker]:hidden">
+                <Building2 size={16} className="text-[#14352d]" /> Firma completa <ChevronDown size={15} className="text-stone-400" />
+              </summary>
+              <div className="absolute left-0 top-11 z-30 w-80 rounded-xl border border-stone-200 bg-white p-2 shadow-xl">
+                <p className="px-2 py-1.5 text-xs font-medium text-stone-500">Contexto de trabajo</p>
+                <button className="flex w-full items-center gap-3 rounded-lg bg-[#e7f0e9] px-3 py-2.5 text-left" type="button"><Landmark size={17} className="text-[#14352d]" /><span><span className="block text-sm font-medium text-[#14352d]">Firma completa</span><span className="block text-xs text-emerald-800">Todas las empresas y tareas</span></span></button>
+                <button className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-stone-100" type="button"><Building2 size={17} className="text-stone-500" /><span><span className="block text-sm font-medium">Distribuidora El Roble, C.A.</span><span className="block text-xs text-stone-500">Sin sucursales</span></span></button>
+                <button className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-stone-100" type="button"><Building2 size={17} className="text-stone-500" /><span><span className="block text-sm font-medium">Inversiones Costa Azul, C.A.</span><span className="block text-xs text-stone-500">1 sucursal · seleccionar al entrar</span></span></button>
+                <p className="px-2 pb-1 pt-2 text-[11px] leading-4 text-stone-400">La sucursal solo se solicita si la empresa la utiliza.</p>
+              </div>
+            </details>
+            <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 xl:flex">
               <Search size={16} />
               <span>Buscar empresa, cliente o tarea...</span>
               <kbd className="ml-16 rounded border border-stone-200 px-1.5 py-0.5 text-[10px]">⌘ K</kbd>
@@ -114,6 +128,7 @@ export default function Home() {
               <Bell size={19} />
               <span className="absolute right-2 top-2 size-1.5 rounded-full bg-rose-500" />
             </button>
+            <ThemeToggle />
             <div className="h-7 w-px bg-stone-200" />
             <Avatar className="size-9"><AvatarFallback className="bg-[#dbe8df] text-xs font-semibold text-[#14352d]">LU</AvatarFallback></Avatar>
           </div>

@@ -9,6 +9,7 @@ import {
   ClipboardList,
   FileText,
   Landmark,
+  Menu,
   MoreHorizontal,
   Plus,
   ReceiptText,
@@ -83,6 +84,24 @@ export default function Home() {
       <section className="lg:pl-64">
         <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-stone-200 bg-[#f7f7f4]/90 px-5 backdrop-blur lg:px-10">
           <div className="flex items-center gap-3">
+            <details className="group relative lg:hidden">
+              <summary className="grid size-9 cursor-pointer list-none place-items-center rounded-lg text-stone-600 hover:bg-stone-200 [&::-webkit-details-marker]:hidden" aria-label="Abrir menú de navegación">
+                <Menu size={21} />
+              </summary>
+              <div className="absolute left-0 top-12 z-30 w-72 rounded-xl border border-stone-200 bg-white p-3 shadow-xl">
+                <div className="mb-3 flex items-center gap-3 border-b border-stone-100 px-2 pb-3">
+                  <div className="grid size-8 place-items-center rounded-lg bg-[#14352d] text-xs font-bold text-white">PX</div>
+                  <div><p className="text-sm font-semibold">proyectoxyz</p><p className="text-xs text-stone-500">Firma contable</p></div>
+                </div>
+                <nav className="space-y-1" aria-label="Navegación móvil">
+                  {navItems.map(({ label, icon: Icon, active }) => (
+                    <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${active ? "bg-[#e7f0e9] font-medium text-[#14352d]" : "text-stone-600 hover:bg-stone-100"}`} key={label} type="button">
+                      <Icon size={18} /> {label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </details>
             <div className="grid size-9 place-items-center rounded-xl bg-[#14352d] text-sm font-bold text-white lg:hidden">PX</div>
             <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 md:flex">
               <Search size={16} />

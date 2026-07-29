@@ -2,9 +2,9 @@
 
 ## Propósito
 
-`proyectoxyz` será el panel administrativo de una firma contable. Su objetivo es centralizar el control financiero, contable, tributario y documental de las empresas atendidas, reducir trabajo manual de forma progresiva y permitir supervisar a futuros colaboradores.
+`proyectoxyz` será el panel administrativo de una firma contable que opera en **Venezuela**. Su objetivo es centralizar el control financiero, contable, tributario y documental de las empresas atendidas, reducir trabajo manual de forma progresiva y permitir supervisar a futuros colaboradores.
 
-La primera etapa se concentrará en el área tributaria: calendario de obligaciones, seguimiento de declaraciones, estados de cumplimiento y prevención de mora.
+La primera etapa se concentrará en el área tributaria venezolana: calendario de obligaciones, seguimiento de declaraciones, estados de cumplimiento y prevención de mora. La normativa, los criterios de cálculo y las fechas deberán poder parametrizarse y validarse antes de automatizar acciones que produzcan efectos fiscales.
 
 ## Usuarios y acceso
 
@@ -18,13 +18,16 @@ Un usuario puede tener acceso a varias empresas. Una empresa puede tener una o v
 
 ## Alcance funcional inicial (MVP tributario)
 
-1. **Clientes, empresas y sucursales**: ficha, datos fiscales, responsables y estructura organizativa.
+1. **Clientes, empresas y sucursales**: ficha, datos fiscales venezolanos, responsables y estructura organizativa.
 2. **Planes configurables**: cada plan define los servicios que se controlan para cada empresa, incluidos servicios públicos (aseo, electricidad y agua) cuando correspondan.
-3. **Calendario tributario**: obligaciones por empresa, período, fecha límite, responsable y estatus.
-4. **Flujo de cumplimiento**: pendiente → en preparación → listo para revisión → presentado/pagado → vencido o con incidencia.
-5. **Evidencias**: comprobantes de declaración, pago y documentos vinculados, disponibles según permisos.
-6. **Panel de la firma**: prioridades del día, próximos vencimientos, tareas retrasadas y carga por colaborador.
-7. **Portal del cliente**: estado resumido de su empresa y descargas de comprobantes/reportes autorizados.
+3. **Operaciones comerciales**: registro de compras, ventas, clientes, proveedores, documentos de soporte y sus datos fiscales.
+4. **Retenciones**: control y cálculo parametrizable de retenciones de IVA e Impuesto Sobre la Renta, con comprobantes y períodos asociados.
+5. **Regímenes especiales**: configuración de clientes como sujetos pasivos especiales y soporte para reglas, obligaciones y tratamientos específicos que se definirán posteriormente.
+6. **Calendario tributario**: obligaciones por empresa, período, fecha límite, responsable y estatus.
+7. **Flujo de cumplimiento**: pendiente → en preparación → listo para revisión → presentado/pagado → vencido o con incidencia.
+8. **Evidencias**: comprobantes de declaración, pago y documentos vinculados, disponibles según permisos.
+9. **Panel de la firma**: prioridades del día, próximos vencimientos, tareas retrasadas y carga por colaborador.
+10. **Portal del cliente**: estado resumido de su empresa y descargas de comprobantes/reportes autorizados.
 
 ## Principios de diseño
 
@@ -46,7 +49,10 @@ Estas capacidades se evaluarán por fases, una vez que el control tributario sea
 ## Datos que se definirán con el usuario
 
 - País/administración tributaria aplicable y reglas de vencimiento.
-- Tipos de declaraciones, periodicidad y requisitos por empresa.
+- Tipos de declaraciones, periodicidad, requisitos y fuentes normativas por empresa.
+- Reglas de registro de compras y ventas: campos requeridos, tipos de comprobante, moneda, tasas y libros aplicables.
+- Reglas de retención de IVA e ISLR: porcentajes, bases, exclusiones, comprobantes y períodos.
+- Reglas aplicables a sujetos pasivos especiales y el tratamiento esperado.
 - Catálogo de planes y servicios incluidos.
 - Estados, responsables, aprobaciones y alertas deseados.
 - Estructura y formatos de reportes contables y legales.
@@ -71,6 +77,7 @@ Estas capacidades se evaluarán por fases, una vez que el control tributario sea
 - Copias de seguridad verificadas de PostgreSQL y documentos.
 - Variables sensibles solo en `.env`, nunca en Git.
 - Separación estricta de datos entre clientes y empresas.
+- Ningún cálculo, fecha o regla tributaria venezolana debe quedar codificado sin una fuente normativa, una vigencia y una forma de actualización.
 
 ## Hitos sugeridos
 
@@ -79,4 +86,3 @@ Estas capacidades se evaluarán por fases, una vez que el control tributario sea
 3. Construir calendario tributario, tareas, responsables, estados y alertas.
 4. Habilitar carga/descarga de comprobantes y portal del cliente.
 5. Añadir reportes, indicadores y automatizaciones priorizadas con datos reales.
-

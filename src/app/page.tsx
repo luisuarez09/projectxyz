@@ -1,6 +1,5 @@
 import {
   ArrowUpRight,
-  Bell,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -22,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContextSelector } from "@/components/context-selector";
+import { NotificationMenu } from "@/components/notification-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 
@@ -107,17 +107,14 @@ export default function Home() {
             </details>
             <div className="grid size-9 place-items-center rounded-xl bg-[#14352d] text-sm font-bold text-white lg:hidden">PX</div>
             <ContextSelector />
-            <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 xl:flex">
+            <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 dark:border-stone-700 dark:bg-stone-900 xl:flex">
               <Search size={16} />
               <span>Buscar empresa, cliente o tarea...</span>
               <kbd className="ml-16 rounded border border-stone-200 px-1.5 py-0.5 text-[10px]">⌘ K</kbd>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="relative grid size-9 place-items-center rounded-lg text-stone-500 hover:bg-stone-200" type="button" aria-label="Notificaciones">
-              <Bell size={19} />
-              <span className="absolute right-2 top-2 size-1.5 rounded-full bg-rose-500" />
-            </button>
+            <NotificationMenu />
             <ThemeToggle />
             <div className="h-7 w-px bg-stone-200" />
             <UserMenu />
@@ -155,7 +152,7 @@ export default function Home() {
                   {tasks.map((task) => (
                     <div className="flex flex-col gap-3 py-4 first:pt-1 sm:flex-row sm:items-center sm:justify-between" key={task.company}>
                       <div className="flex min-w-0 gap-3">
-                        <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-500"><Building2 size={17} /></div>
+                      <div className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-lg bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-300"><Building2 size={17} /></div>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{task.company}</p>
                           <p className="mt-0.5 text-sm text-stone-500">{task.task}</p>
@@ -181,15 +178,15 @@ export default function Home() {
                 <div className="space-y-4">
                   {deadlines.map((deadline) => (
                     <div className="flex items-center gap-3" key={deadline.label}>
-                      <div className="grid size-11 shrink-0 place-items-center rounded-lg border border-stone-200 bg-stone-50 text-center leading-none">
-                        <strong className="text-sm">{deadline.day}</strong><span className="mt-0.5 text-[9px] font-medium text-stone-500">{deadline.month}</span>
+                      <div className="grid size-11 shrink-0 place-items-center rounded-lg border border-stone-200 bg-stone-50 text-center leading-none text-stone-900 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100">
+                        <strong className="text-sm">{deadline.day}</strong><span className="mt-0.5 text-[9px] font-medium text-stone-500 dark:text-stone-400">{deadline.month}</span>
                       </div>
                       <div className="min-w-0 flex-1"><p className="text-sm font-medium">{deadline.label}</p><p className="mt-0.5 text-xs text-stone-500">{deadline.count}</p></div>
                       <span className={`size-2 rounded-full ${deadline.color}`} aria-hidden="true" />
                     </div>
                   ))}
                 </div>
-                <button className="mt-6 flex w-full items-center justify-center gap-1 rounded-lg border border-stone-200 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50" type="button">Abrir calendario <ArrowUpRight size={15} /></button>
+                <button className="mt-6 flex w-full items-center justify-center gap-1 rounded-lg border border-stone-200 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800" type="button">Abrir calendario <ArrowUpRight size={15} /></button>
               </CardContent>
             </Card>
           </div>
@@ -217,11 +214,11 @@ export default function Home() {
 }
 
 function Metric({ label, value, note, icon: Icon, tint }: { label: string; value: string; note: string; icon: typeof CalendarDays; tint: "rose" | "amber" | "blue" | "green" }) {
-  const colors = { rose: "bg-rose-50 text-rose-600", amber: "bg-amber-50 text-amber-600", blue: "bg-sky-50 text-sky-600", green: "bg-emerald-50 text-emerald-600" };
+  const colors = { rose: "bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-300", amber: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300", blue: "bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300", green: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300" };
   return <Card className="border-0 shadow-sm"><CardContent className="flex items-start justify-between pt-4"><div><p className="text-sm text-stone-500">{label}</p><p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-stone-500">{note}</p></div><div className={`grid size-9 place-items-center rounded-lg ${colors[tint]}`}><Icon size={18} /></div></CardContent></Card>;
 }
 
 function CompanyRow({ name, plan, due, owner, status, tone }: { name: string; plan: string; due: string; owner: string; status: string; tone: "danger" | "review" | "good" }) {
   const color = { danger: "border-rose-200 bg-rose-50 text-rose-700", review: "border-amber-200 bg-amber-50 text-amber-700", good: "border-emerald-200 bg-emerald-50 text-emerald-700" };
-  return <tr className="border-b border-stone-100 last:border-0"><td className="py-4 pr-4 font-medium">{name}</td><td className="py-4 pr-4 text-stone-600">{plan}</td><td className="py-4 pr-4 text-stone-600">{due}</td><td className="py-4 pr-4"><Avatar className="size-7"><AvatarFallback className="bg-stone-100 text-[10px] font-semibold text-stone-600">{owner}</AvatarFallback></Avatar></td><td className="py-4 text-right"><Badge variant="outline" className={color[tone]}>{status}</Badge></td></tr>;
+  return <tr className="border-b border-stone-100 last:border-0 dark:border-stone-800"><td className="py-4 pr-4 font-medium">{name}</td><td className="py-4 pr-4 text-stone-600 dark:text-stone-300">{plan}</td><td className="py-4 pr-4 text-stone-600 dark:text-stone-300">{due}</td><td className="py-4 pr-4"><Avatar className="size-7"><AvatarFallback className="bg-stone-100 text-[10px] font-semibold text-stone-600 dark:bg-stone-800 dark:text-stone-300">{owner}</AvatarFallback></Avatar></td><td className="py-4 text-right"><Badge variant="outline" className={color[tone]}>{status}</Badge></td></tr>;
 }

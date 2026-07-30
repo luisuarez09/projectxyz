@@ -130,6 +130,49 @@
 
 @layer components {
   .field {
-    @apply h-9 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm font-normal text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-[#14352d] dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100;
+    @apply h-9 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-normal text-stone-900 shadow-sm outline-none transition-colors placeholder:text-stone-400 hover:border-stone-300 focus:border-[#14352d] focus:ring-3 focus:ring-[#14352d]/15 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:hover:border-stone-600;
+  }
+
+  select.field { @apply cursor-pointer pr-8; }
+  textarea.field { @apply h-auto resize-y; }
+
+  /* La tasa se muestra como regla de la empresa, no como dato editable. */
+  .field-label:has(input[placeholder="Según regla vigente"]) { font-size: 0; }
+  .field-label:has(input[placeholder="Según regla vigente"]) > .relative { display: none; }
+  .field-label:has(input[placeholder="Según regla vigente"])::after {
+    content: "Regla de IVA configurada · 16 %";
+    @apply mt-1.5 block h-9 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-normal text-stone-600 shadow-sm;
+  }
+
+  .menu-action {
+    @apply flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm text-stone-700 hover:bg-stone-100 dark:text-stone-200 dark:hover:bg-stone-800;
+  }
+
+  .field-label {
+    @apply text-sm font-medium text-stone-800 dark:text-stone-100;
+  }
+}
+
+@media print {
+  @page { margin: 16mm; }
+
+  aside,
+  header,
+  button,
+  input,
+  select,
+  textarea {
+    display: none !important;
+  }
+
+  main,
+  section,
+  .min-h-screen {
+    background: white !important;
+    color: #1c1917 !important;
+  }
+
+  section {
+    padding-left: 0 !important;
   }
 }

@@ -6,14 +6,11 @@ import {
   ChevronRight,
   CircleAlert,
   ClipboardList,
-  FileText,
   Landmark,
   Menu,
   MoreHorizontal,
   Plus,
-  ReceiptText,
   Search,
-  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -26,15 +23,7 @@ import { NotificationMenu } from "@/components/notification-menu";
 import { MobileSearch } from "@/components/mobile-search";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
-
-const navItems = [
-  { label: "Resumen", icon: Landmark, active: true, href: "/" },
-  { label: "Empresas", icon: Building2, href: "/empresas" },
-  { label: "Calendario", icon: CalendarDays, href: "/calendario" },
-  { label: "Operaciones", icon: ReceiptText, href: "#" },
-  { label: "Documentos", icon: FileText, href: "#" },
-  { label: "Equipo", icon: UsersRound, href: "#" },
-];
+import { SidebarNavigation } from "@/components/sidebar-navigation";
 
 const tasks = [
   { company: "Distribuidora El Roble, C.A.", task: "Retención de IVA · Junio 2026", date: "Hoy, 4:00 p. m.", status: "Prioridad", tone: "danger" },
@@ -66,18 +55,7 @@ export default function Home() {
           </div>
         </div>
 
-        <nav className="space-y-1" aria-label="Navegación principal">
-          {navItems.map(({ label, icon: Icon, active, href }) => (
-            <Link
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${active ? "bg-[#e7f0e9] font-medium text-[#14352d] dark:bg-emerald-950 dark:text-emerald-100" : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"}`}
-              href={href}
-              key={label}
-            >
-              <Icon size={18} strokeWidth={active ? 2.25 : 1.8} />
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <SidebarNavigation active="Resumen" />
 
         <div className="mt-auto rounded-xl bg-[#14352d] p-4 text-white">
           <p className="text-xs font-medium text-emerald-100">PLAN PROFESIONAL</p>
@@ -98,13 +76,7 @@ export default function Home() {
                   <div className="grid size-8 place-items-center rounded-lg bg-[#14352d] text-xs font-bold text-white">PX</div>
                   <div><p className="text-sm font-semibold">proyectoxyz</p><p className="text-xs text-stone-500">Firma contable</p></div>
                 </div>
-                <nav className="space-y-1" aria-label="Navegación móvil">
-                  {navItems.map(({ label, icon: Icon, active, href }) => (
-                    <Link className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${active ? "bg-[#e7f0e9] font-medium text-[#14352d]" : "text-stone-600 hover:bg-stone-100"}`} href={href} key={label}>
-                      <Icon size={18} /> {label}
-                    </Link>
-                  ))}
-                </nav>
+                <SidebarNavigation active="Resumen" />
               </div>
             </details>
             <div className="grid size-9 place-items-center rounded-xl bg-[#14352d] text-sm font-bold text-white lg:hidden">PX</div>

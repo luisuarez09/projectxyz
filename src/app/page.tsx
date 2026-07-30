@@ -29,7 +29,7 @@ import { UserMenu } from "@/components/user-menu";
 
 const navItems = [
   { label: "Resumen", icon: Landmark, active: true, href: "/" },
-  { label: "Empresas", icon: Building2, href: "#" },
+  { label: "Empresas", icon: Building2, href: "/empresas" },
   { label: "Calendario", icon: CalendarDays, href: "/calendario" },
   { label: "Operaciones", icon: ReceiptText, href: "#" },
   { label: "Documentos", icon: FileText, href: "#" },

@@ -127,3 +127,9 @@
     @apply font-sans;
     }
 }
+
+@layer components {
+  .field {
+    @apply h-9 w-full rounded-lg border border-stone-200 bg-white px-2.5 text-sm font-normal text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-[#14352d] dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100;
+  }
+}

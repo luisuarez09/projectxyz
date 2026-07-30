@@ -15,6 +15,7 @@ import {
   Search,
   UsersRound,
 } from "lucide-react";
+import Link from "next/link";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -27,12 +28,12 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 
 const navItems = [
-  { label: "Resumen", icon: Landmark, active: true },
-  { label: "Empresas", icon: Building2 },
-  { label: "Calendario", icon: CalendarDays },
-  { label: "Operaciones", icon: ReceiptText },
-  { label: "Documentos", icon: FileText },
-  { label: "Equipo", icon: UsersRound },
+  { label: "Resumen", icon: Landmark, active: true, href: "/" },
+  { label: "Empresas", icon: Building2, href: "#" },
+  { label: "Calendario", icon: CalendarDays, href: "/calendario" },
+  { label: "Operaciones", icon: ReceiptText, href: "#" },
+  { label: "Documentos", icon: FileText, href: "#" },
+  { label: "Equipo", icon: UsersRound, href: "#" },
 ];
 
 const tasks = [
@@ -66,15 +67,15 @@ export default function Home() {
         </div>
 
         <nav className="space-y-1" aria-label="Navegación principal">
-          {navItems.map(({ label, icon: Icon, active }) => (
-            <button
+          {navItems.map(({ label, icon: Icon, active, href }) => (
+            <Link
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${active ? "bg-[#e7f0e9] font-medium text-[#14352d] dark:bg-emerald-950 dark:text-emerald-100" : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"}`}
+              href={href}
               key={label}
-              type="button"
             >
               <Icon size={18} strokeWidth={active ? 2.25 : 1.8} />
               {label}
-            </button>
+            </Link>
           ))}
         </nav>
 
@@ -98,10 +99,10 @@ export default function Home() {
                   <div><p className="text-sm font-semibold">proyectoxyz</p><p className="text-xs text-stone-500">Firma contable</p></div>
                 </div>
                 <nav className="space-y-1" aria-label="Navegación móvil">
-                  {navItems.map(({ label, icon: Icon, active }) => (
-                    <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${active ? "bg-[#e7f0e9] font-medium text-[#14352d]" : "text-stone-600 hover:bg-stone-100"}`} key={label} type="button">
+                  {navItems.map(({ label, icon: Icon, active, href }) => (
+                    <Link className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm ${active ? "bg-[#e7f0e9] font-medium text-[#14352d]" : "text-stone-600 hover:bg-stone-100"}`} href={href} key={label}>
                       <Icon size={18} /> {label}
-                    </button>
+                    </Link>
                   ))}
                 </nav>
               </div>
@@ -189,7 +190,7 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                <button className="mt-6 flex w-full items-center justify-center gap-1 rounded-lg border border-stone-200 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800" type="button">Abrir calendario <ArrowUpRight size={15} /></button>
+                <Link className="mt-6 flex w-full items-center justify-center gap-1 rounded-lg border border-stone-200 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 dark:border-stone-700 dark:text-stone-200 dark:hover:bg-stone-800" href="/calendario">Abrir calendario <ArrowUpRight size={15} /></Link>
               </CardContent>
             </Card>
           </div>

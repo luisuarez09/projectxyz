@@ -25,6 +25,9 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { SidebarNavigation } from "@/components/sidebar-navigation";
 
+import { Kbd } from "@/components/ui/kbd";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+
 const tasks = [
   { company: "Distribuidora El Roble, C.A.", task: "Retención de IVA · Junio 2026", date: "Hoy, 4:00 p. m.", status: "Prioridad", tone: "danger" },
   { company: "Inversiones Costa Azul, C.A.", task: "Declaración IVA · Junio 2026", date: "30 jul · 2 días", status: "En revisión", tone: "review" },
@@ -63,7 +66,6 @@ export default function Home() {
           <button className="mt-4 text-xs font-semibold text-white underline underline-offset-4" type="button">Ver cobertura del plan</button>
         </div>
       </aside>
-
       <section className="lg:pl-64">
         <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-stone-200 bg-[#f7f7f4]/90 px-3 backdrop-blur dark:border-stone-800 dark:bg-stone-950/90 sm:px-5 lg:px-10">
           <div className="flex items-center gap-2 sm:gap-3">
@@ -86,7 +88,7 @@ export default function Home() {
             <div className="hidden items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400 dark:border-stone-700 dark:bg-stone-900 xl:flex">
               <Search size={16} />
               <span>Buscar empresa, cliente o tarea...</span>
-              <kbd className="ml-16 rounded border border-stone-200 px-1.5 py-0.5 text-[10px]">⌘ K</kbd>
+              <Kbd className="ml-16 rounded border border-stone-200 px-1.5 py-0.5 text-[10px]">⌘ K</Kbd>
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-3">
@@ -173,14 +175,14 @@ export default function Home() {
               <Button variant="outline" size="sm">Ver empresas</Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
-              <table className="w-full min-w-160 text-left text-sm">
-                <thead className="border-y border-stone-100 text-xs font-medium text-stone-500"><tr><th className="py-3 pr-4">Empresa</th><th className="py-3 pr-4">Plan</th><th className="py-3 pr-4">Próxima obligación</th><th className="py-3 pr-4">Responsable</th><th className="py-3 text-right">Estado</th></tr></thead>
-                <tbody>
+              <Table className="w-full min-w-160 text-left text-sm">
+                <TableHeader className="border-y border-stone-100 text-xs font-medium text-stone-500"><TableRow><TableHead className="py-3 pr-4">Empresa</TableHead><TableHead className="py-3 pr-4">Plan</TableHead><TableHead className="py-3 pr-4">Próxima obligación</TableHead><TableHead className="py-3 pr-4">Responsable</TableHead><TableHead className="py-3 text-right">Estado</TableHead></TableRow></TableHeader>
+                <TableBody>
                   <CompanyRow name="Distribuidora El Roble, C.A." plan="Integral" due="Retención IVA · Hoy" owner="LU" status="Atención" tone="danger" />
                   <CompanyRow name="Inversiones Costa Azul, C.A." plan="Integral" due="IVA · 30 jul" owner="MA" status="En revisión" tone="review" />
                   <CompanyRow name="Servicios Maracay, C.A." plan="Esencial" due="Libro compras · 31 jul" owner="JP" status="Al día" tone="good" />
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
@@ -196,5 +198,5 @@ function Metric({ label, value, note, icon: Icon, tint }: { label: string; value
 
 function CompanyRow({ name, plan, due, owner, status, tone }: { name: string; plan: string; due: string; owner: string; status: string; tone: "danger" | "review" | "good" }) {
   const color = { danger: "border-rose-200 bg-rose-50 text-rose-700", review: "border-amber-200 bg-amber-50 text-amber-700", good: "border-emerald-200 bg-emerald-50 text-emerald-700" };
-  return <tr className="border-b border-stone-100 last:border-0 dark:border-stone-800"><td className="py-4 pr-4 font-medium">{name}</td><td className="py-4 pr-4 text-stone-600 dark:text-stone-300">{plan}</td><td className="py-4 pr-4 text-stone-600 dark:text-stone-300">{due}</td><td className="py-4 pr-4"><Avatar className="size-7"><AvatarFallback className="bg-stone-100 text-[10px] font-semibold text-stone-600 dark:bg-stone-800 dark:text-stone-300">{owner}</AvatarFallback></Avatar></td><td className="py-4 text-right"><Badge variant="outline" className={color[tone]}>{status}</Badge></td></tr>;
+  return <TableRow className="border-b border-stone-100 last:border-0 dark:border-stone-800"><TableCell className="py-4 pr-4 font-medium">{name}</TableCell><TableCell className="py-4 pr-4 text-stone-600 dark:text-stone-300">{plan}</TableCell><TableCell className="py-4 pr-4 text-stone-600 dark:text-stone-300">{due}</TableCell><TableCell className="py-4 pr-4"><Avatar className="size-7"><AvatarFallback className="bg-stone-100 text-[10px] font-semibold text-stone-600 dark:bg-stone-800 dark:text-stone-300">{owner}</AvatarFallback></Avatar></TableCell><TableCell className="py-4 text-right"><Badge variant="outline" className={color[tone]}>{status}</Badge></TableCell></TableRow>;
 }

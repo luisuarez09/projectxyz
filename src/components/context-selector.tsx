@@ -1,9 +1,10 @@
-"use client";
-
+"use client";;
 import { Building2, ChevronDown, Landmark, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useDismissableMenu } from "@/hooks/use-dismissable-menu";
+
+import { Input } from "@/components/ui/input";
 
 const companies = [
   { name: "Distribuidora El Roble, C.A.", business: "Distribución de alimentos" },
@@ -45,7 +46,7 @@ export function ContextSelector({ mobile = false }: { mobile?: boolean }) {
         <button className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${selected === "Firma completa" ? "bg-[#e7f0e9] dark:bg-emerald-950" : "hover:bg-stone-100 dark:hover:bg-stone-800"}`} onClick={() => selectCompany("Firma completa")} type="button">
           <Landmark size={17} className="text-[#14352d] dark:text-emerald-300" /><span><span className="block text-sm font-medium text-[#14352d] dark:text-emerald-100">Firma completa</span><span className="block text-xs text-emerald-800 dark:text-emerald-300">Todas las empresas y tareas</span></span>
         </button>
-        <div className="relative my-2"><Search className="pointer-events-none absolute left-3 top-2.5 text-stone-400" size={15} /><input aria-label="Buscar empresa" className="h-9 w-full rounded-lg border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none placeholder:text-stone-400 focus:border-[#14352d] dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" onChange={(event) => { setQuery(event.target.value); setFocusedIndex(0); }} onKeyDown={handleKeyboard} placeholder="Buscar empresa..." value={query} /></div>
+        <div className="relative my-2"><Search className="pointer-events-none absolute left-3 top-2.5 text-stone-400" size={15} /><Input aria-label="Buscar empresa" className="h-9 w-full rounded-lg border border-stone-200 bg-stone-50 pl-9 pr-3 text-sm outline-none placeholder:text-stone-400 focus:border-[#14352d] dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100" onChange={(event) => { setQuery(event.target.value); setFocusedIndex(0); }} onKeyDown={handleKeyboard} placeholder="Buscar empresa..." value={query} /></div>
         <div className="max-h-57 overflow-y-auto" role="listbox" aria-label="Resultados de empresas">
           {visibleCompanies.map((company, index) => <button aria-selected={focusedIndex === index} className={`mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${focusedIndex === index ? "bg-stone-100 dark:bg-stone-800" : "hover:bg-stone-100 dark:hover:bg-stone-800"}`} key={company.name} onClick={() => selectCompany(company.name)} role="option" type="button"><Building2 size={17} className="text-stone-500" /><span className="min-w-0"><span className="block truncate text-sm font-medium">{company.name}</span><span className="block truncate text-xs text-stone-500 dark:text-stone-400">{company.business}</span></span></button>)}
           {visibleCompanies.length === 0 && <p className="px-3 py-4 text-center text-sm text-stone-500">No se encontraron empresas.</p>}

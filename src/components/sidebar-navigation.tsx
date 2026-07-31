@@ -1,49 +1,157 @@
-"use client";
+"use client"
 
-import { Archive, BookOpenCheck, Building2, CalendarDays, ChevronDown, Landmark, ReceiptText, Settings2, UsersRound, WalletCards } from "lucide-react";
-import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import {
+  Archive,
+  Building2,
+  CalendarDays,
+  ChevronDown,
+  Landmark,
+  ReceiptText,
+  Settings2,
+  UsersRound,
+  WalletCards,
+} from "lucide-react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { useState } from "react"
 
-type ActiveSection = "Resumen" | "Empresas" | "Calendario" | "Archivo" | "Equipo" | "Operaciones";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+} from "@/components/ui/sidebar"
 
 const primaryItems = [
   { label: "Resumen", href: "/", icon: Landmark },
   { label: "Empresas", href: "/empresas", icon: Building2 },
   { label: "Calendario", href: "/calendario", icon: CalendarDays },
   { label: "Archivo", href: "/archivo", icon: Archive },
-  { label: "Equipo", href: "#", icon: UsersRound },
-];
+  { label: "Equipo", href: "/equipo", icon: UsersRound },
+]
 
-export function SidebarNavigation({ active }: { active: ActiveSection }) {
-  const [operationsOpen, setOperationsOpen] = useState(active === "Operaciones");
-  const [settingsOpen, setSettingsOpen] = useState(false);
+const firmSettings = [
+  { label: "General", href: "/configuracion/general" },
+  { label: "Planes de servicio", href: "/configuracion/planes" },
+  { label: "Catálogo de servicios", href: "/configuracion/servicios" },
+  { label: "Impuestos", href: "/configuracion/impuestos" },
+  { label: "Tasas de cambio", href: "/configuracion/tasas-cambio" },
+]
 
-  return <nav className="space-y-1" aria-label="Navegación principal">
-    {primaryItems.map(({ label, href, icon: Icon }) => {
-      const isActive = active === label;
-      return <Link className={navClass(isActive)} href={href} key={label}><Icon size={18} strokeWidth={isActive ? 2.25 : 1.8} />{label}</Link>;
-    })}
-    <div className="my-5 border-t border-stone-200 pt-4 dark:border-stone-800">
-      <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-400">Empresa activa</p>
-      <p className="truncate px-3 pb-2 text-xs font-medium text-[#14352d] dark:text-emerald-200">Distribuidora El Roble, C.A.</p>
-      <Link className={navClass(false)} href="/declaraciones"><FileTextIcon /><span className="flex-1">Declaraciones</span></Link>
-      <Link className={navClass(false)} href="/servicios"><WalletCards size={18} /><span className="flex-1">Servicios</span></Link>
-      <Link className={navClass(false)} href="/compromisos-de-pago"><Landmark size={18} /><span className="flex-1">Compromisos de pago</span></Link>
-      <button aria-expanded={operationsOpen} className={navClass(active === "Operaciones")} onClick={() => setOperationsOpen((open) => !open)} type="button"><ReceiptText size={18} /><span className="flex-1 text-left">Operaciones</span><ChevronDown className={`transition-transform ${operationsOpen ? "rotate-180" : ""}`} size={15} /></button>
-      {operationsOpen && <div className="ml-5 mt-1 space-y-0.5 border-l border-stone-200 pl-3 dark:border-stone-700"><SubItem href="/operaciones" label="Vista general" /><SubItem href="/operaciones/clientes" label="Clientes" /><SubItem href="/operaciones/proveedores" label="Proveedores" /><SubItem href="/operaciones/compras" label="Compras" /><SubItem href="/operaciones/ventas" label="Ventas" /><SubItem href="#" label="Retenciones" /></div>}
-      <Link className={navClass(false)} href="#"><WalletCards size={18} /><span className="flex-1">Personal y nómina</span><span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-500 dark:bg-stone-800">Próx.</span></Link>
-      <button aria-expanded={settingsOpen} className={navClass(false)} onClick={() => setSettingsOpen((open) => !open)} type="button"><Settings2 size={18} /><span className="flex-1 text-left">Configuración</span><ChevronDown className={`transition-transform ${settingsOpen ? "rotate-180" : ""}`} size={15} /></button>
-      {settingsOpen && <div className="ml-5 mt-1 space-y-0.5 border-l border-stone-200 pl-3 dark:border-stone-700"><SubItem href="/configuracion/empresa" label="Empresa y cobertura" /><SubItem href="#" label="Plan de cuentas" icon={<BookOpenCheck size={14} />} /></div>}
-    </div>
-  </nav>;
+const operations = [
+  { label: "Vista general", href: "/operaciones" },
+  { label: "Clientes", href: "/operaciones/clientes" },
+  { label: "Proveedores", href: "/operaciones/proveedores" },
+  { label: "Compras", href: "/operaciones/compras" },
+  { label: "Ventas", href: "/operaciones/ventas" },
+  { label: "Retenciones", href: "/operaciones/ventas?tab=retenciones" },
+]
+
+export function SidebarNavigation(_legacyProps?: { active?: string }) {
+  const pathname = usePathname()
+  const operationsActive = pathname.startsWith("/operaciones")
+  const settingsActive = pathname.startsWith("/configuracion") && pathname !== "/configuracion/empresa"
+  const [operationsOpen, setOperationsOpen] = useState(operationsActive)
+  const [settingsOpen, setSettingsOpen] = useState(settingsActive)
+
+  return (
+    <>
+      <SidebarGroup>
+        <SidebarGroupLabel>Firma</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {primaryItems.map((item) => (
+              <NavItem href={item.href} icon={item.icon} key={item.href} label={item.label} pathname={pathname} />
+            ))}
+            <CollapsibleItem active={settingsActive} icon={Settings2} label="Configuración" onToggle={() => setSettingsOpen((open) => !open)} open={settingsOpen}>
+              {firmSettings.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
+            </CollapsibleItem>
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+
+      <SidebarGroup>
+        <SidebarGroupLabel>Empresa activa</SidebarGroupLabel>
+        <p className="truncate px-2 pb-2 text-xs font-medium text-[#14352d] group-data-[collapsible=icon]:hidden dark:text-emerald-200">
+          Distribuidora El Roble, C.A.
+        </p>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            <CollapsibleItem active={operationsActive} icon={ReceiptText} label="Operaciones" onToggle={() => setOperationsOpen((open) => !open)} open={operationsOpen}>
+              {operations.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
+            </CollapsibleItem>
+            <NavItem href="/declaraciones" icon={ReceiptText} label="Declaraciones" pathname={pathname} />
+            <NavItem href="/servicios" icon={WalletCards} label="Servicios" pathname={pathname} />
+            <SidebarMenuItem>
+              <SidebarMenuButton aria-disabled tooltip="Empleados">
+                <UsersRound />
+                <span>Empleados</span>
+              </SidebarMenuButton>
+              <SidebarMenuBadge>Próx.</SidebarMenuBadge>
+            </SidebarMenuItem>
+            <NavItem href="/compromisos-de-pago" icon={Landmark} label="Compromisos de pago" pathname={pathname} />
+            <NavItem href="/configuracion/empresa" icon={Settings2} label="Configuración empresa" pathname={pathname} />
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </>
+  )
 }
 
-function FileTextIcon() { return <ReceiptText size={18} />; }
-
-function SubItem({ href, label, icon }: { href: string; label: string; icon?: ReactNode }) {
-  return <Link className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-100" href={href}>{icon}{label}</Link>;
+function NavItem({ href, icon: Icon, label, pathname }: { href: string; icon: typeof Landmark; label: string; pathname: string }) {
+  const active = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`)
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        className="h-10 rounded-lg px-3 text-stone-600 data-active:bg-[#e7f0e9] data-active:font-medium data-active:text-[#14352d] hover:bg-stone-100 dark:text-stone-300 dark:data-active:bg-emerald-950 dark:data-active:text-emerald-100 dark:hover:bg-stone-800"
+        isActive={active}
+        render={<Link href={href} />}
+        tooltip={label}
+      >
+        <Icon />
+        <span>{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
 }
 
-function navClass(active: boolean) {
-  return `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${active ? "bg-[#e7f0e9] font-medium text-[#14352d] dark:bg-emerald-950 dark:text-emerald-100" : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800"}`;
+function CollapsibleItem({ active, children, icon: Icon, label, onToggle, open }: { active: boolean; children: React.ReactNode; icon: typeof Landmark; label: string; onToggle: () => void; open: boolean }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        aria-expanded={open}
+        className="h-10 rounded-lg px-3 text-stone-600 data-active:bg-[#e7f0e9] data-active:font-medium data-active:text-[#14352d] hover:bg-stone-100 dark:text-stone-300 dark:data-active:bg-emerald-950 dark:data-active:text-emerald-100 dark:hover:bg-stone-800"
+        isActive={active}
+        onClick={onToggle}
+        tooltip={label}
+      >
+        <Icon />
+        <span>{label}</span>
+        <ChevronDown className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`} />
+      </SidebarMenuButton>
+      {open && <SidebarMenuSub>{children}</SidebarMenuSub>}
+    </SidebarMenuItem>
+  )
+}
+
+function SubItem({ href, label, pathname }: { href: string; label: string; pathname: string }) {
+  const path = href.split("?")[0]
+  const active = path === "/operaciones" ? pathname === path : pathname.startsWith(path)
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        className="h-8 rounded-lg px-3 text-stone-500 data-active:bg-[#e7f0e9] data-active:font-medium data-active:text-[#14352d] dark:text-stone-400 dark:data-active:bg-emerald-950 dark:data-active:text-emerald-100"
+        isActive={active}
+        render={<Link href={href} />}
+      >
+        <span>{label}</span>
+      </SidebarMenuSubButton>
+    </SidebarMenuSubItem>
+  )
 }

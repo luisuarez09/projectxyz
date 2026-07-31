@@ -151,6 +151,19 @@
   .field-label {
     @apply text-sm font-medium text-stone-800 dark:text-stone-100;
   }
+
+  /* Retira los shells duplicados mientras el Sidebar de shadcn controla el marco global. */
+  .app-shell-content > main > aside {
+    display: none !important;
+  }
+
+  .app-shell-content > main > section {
+    padding-left: 0 !important;
+  }
+
+  .app-shell-content > main > section > header {
+    display: none !important;
+  }
 }
 
 @media print {
@@ -174,5 +187,34 @@
 
   section {
     padding-left: 0 !important;
+  }
+
+  body:has(#archive-print-root) * {
+    visibility: hidden !important;
+  }
+
+  body:has(#archive-print-root) #archive-print-root,
+  body:has(#archive-print-root) #archive-print-root * {
+    visibility: visible !important;
+  }
+
+  body:has(#archive-print-root) #archive-print-root {
+    display: block !important;
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+
+  #archive-print-root[data-print-mode="consolidado"] .archive-label-preview,
+  #archive-print-root[data-print-mode="etiqueta"] .archive-consolidated-preview {
+    display: none !important;
+  }
+
+  #archive-print-root .aspect-\[8\.5\/11\],
+  #archive-print-root .archive-preview-page {
+    width: 8.5in !important;
+    height: 11in !important;
+    break-after: page;
+    box-shadow: none !important;
   }
 }

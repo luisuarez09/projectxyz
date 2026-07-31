@@ -2,7 +2,7 @@
 
 import { Building2 } from "lucide-react"
 import { usePathname } from "next/navigation"
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 
 import {
   Select,
@@ -36,7 +36,12 @@ const companies = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const [company, setCompany] = useState("firm")
+  const companyArea = pathname.startsWith("/operaciones") || pathname.startsWith("/declaraciones") || pathname.startsWith("/servicios") || pathname.startsWith("/empleados") || pathname.startsWith("/compromisos-de-pago") || pathname.startsWith("/configuracion/empresa")
+  const [company, setCompany] = useState(companyArea ? "roble" : "firm")
+
+  useEffect(() => {
+    if (companyArea && company === "firm") setCompany("roble")
+  }, [company, companyArea])
 
   if (pathname.startsWith("/calendario/matriz/tv")) return children
 
@@ -70,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <UserMenu />
           </div>
         </header>
-        <div className="app-shell-content min-w-0 flex-1">{children}</div>
+        <div className="app-shell-content min-w-0 max-w-full flex-1 overflow-x-clip">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )

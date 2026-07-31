@@ -13,14 +13,13 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -38,9 +37,9 @@ const primaryItems = [
 
 const firmSettings = [
   { label: "General", href: "/configuracion/general" },
-  { label: "Planes de servicio", href: "/configuracion/planes" },
-  { label: "Catálogo de servicios", href: "/configuracion/servicios" },
+  { label: "Planes", href: "/configuracion/planes" },
   { label: "Impuestos", href: "/configuracion/impuestos" },
+  { label: "Servicios", href: "/configuracion/servicios" },
   { label: "Tasas de cambio", href: "/configuracion/tasas-cambio" },
 ]
 
@@ -53,12 +52,35 @@ const operations = [
   { label: "Retenciones", href: "/operaciones/ventas?tab=retenciones" },
 ]
 
+const employees = [
+  { label: "Resumen", href: "/empleados" },
+  { label: "Directorio", href: "/empleados/directorio" },
+  { label: "Nómina", href: "/empleados/nomina" },
+  { label: "Vacaciones", href: "/empleados/vacaciones" },
+  { label: "Utilidades", href: "/empleados/utilidades" },
+  { label: "Liquidaciones", href: "/empleados/liquidaciones" },
+]
+
+const companySettings = [
+  { label: "Empresa", href: "/configuracion/empresa" },
+  { label: "Plan de cuentas", href: "/configuracion/empresa/plan-cuentas" },
+  { label: "Laboral", href: "/configuracion/empresa/laboral" },
+]
+
 export function SidebarNavigation(_legacyProps?: { active?: string }) {
   const pathname = usePathname()
   const operationsActive = pathname.startsWith("/operaciones")
-  const settingsActive = pathname.startsWith("/configuracion") && pathname !== "/configuracion/empresa"
-  const [operationsOpen, setOperationsOpen] = useState(operationsActive)
-  const [settingsOpen, setSettingsOpen] = useState(settingsActive)
+  const employeesActive = pathname.startsWith("/empleados")
+  const settingsActive = pathname.startsWith("/configuracion") && !pathname.startsWith("/configuracion/empresa")
+  const companySettingsActive = pathname.startsWith("/configuracion/empresa")
+  const activeSection = operationsActive ? "operations" : employeesActive ? "employees" : settingsActive ? "settings" : companySettingsActive ? "company-settings" : null
+  const [openSection, setOpenSection] = useState<"operations" | "employees" | "settings" | "company-settings" | null>(activeSection)
+
+  useEffect(() => {
+    if (activeSection) setOpenSection(activeSection)
+  }, [activeSection])
+
+  const toggleSection = (section: NonNullable<typeof openSection>) => setOpenSection((current) => current === section ? null : section)
 
   return (
     <>
@@ -69,7 +91,7 @@ export function SidebarNavigation(_legacyProps?: { active?: string }) {
             {primaryItems.map((item) => (
               <NavItem href={item.href} icon={item.icon} key={item.href} label={item.label} pathname={pathname} />
             ))}
-            <CollapsibleItem active={settingsActive} icon={Settings2} label="Configuración" onToggle={() => setSettingsOpen((open) => !open)} open={settingsOpen}>
+            <CollapsibleItem active={settingsActive} icon={Settings2} label="Configuración" onToggle={() => toggleSection("settings")} open={openSection === "settings"}>
               {firmSettings.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
             </CollapsibleItem>
           </SidebarMenu>
@@ -83,20 +105,18 @@ export function SidebarNavigation(_legacyProps?: { active?: string }) {
         </p>
         <SidebarGroupContent>
           <SidebarMenu>
-            <CollapsibleItem active={operationsActive} icon={ReceiptText} label="Operaciones" onToggle={() => setOperationsOpen((open) => !open)} open={operationsOpen}>
+            <CollapsibleItem active={operationsActive} icon={ReceiptText} label="Operaciones" onToggle={() => toggleSection("operations")} open={openSection === "operations"}>
               {operations.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
             </CollapsibleItem>
             <NavItem href="/declaraciones" icon={ReceiptText} label="Declaraciones" pathname={pathname} />
             <NavItem href="/servicios" icon={WalletCards} label="Servicios" pathname={pathname} />
-            <SidebarMenuItem>
-              <SidebarMenuButton aria-disabled tooltip="Empleados">
-                <UsersRound />
-                <span>Empleados</span>
-              </SidebarMenuButton>
-              <SidebarMenuBadge>Próx.</SidebarMenuBadge>
-            </SidebarMenuItem>
+            <CollapsibleItem active={employeesActive} icon={UsersRound} label="Empleados" onToggle={() => toggleSection("employees")} open={openSection === "employees"}>
+              {employees.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
+            </CollapsibleItem>
             <NavItem href="/compromisos-de-pago" icon={Landmark} label="Compromisos de pago" pathname={pathname} />
-            <NavItem href="/configuracion/empresa" icon={Settings2} label="Configuración empresa" pathname={pathname} />
+            <CollapsibleItem active={companySettingsActive} icon={Settings2} label="Configuración empresa" onToggle={() => toggleSection("company-settings")} open={openSection === "company-settings"}>
+              {companySettings.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
+            </CollapsibleItem>
           </SidebarMenu>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -142,7 +162,7 @@ function CollapsibleItem({ active, children, icon: Icon, label, onToggle, open }
 
 function SubItem({ href, label, pathname }: { href: string; label: string; pathname: string }) {
   const path = href.split("?")[0]
-  const active = path === "/operaciones" ? pathname === path : pathname.startsWith(path)
+  const active = path === "/operaciones" || path === "/empleados" || path === "/configuracion/empresa" ? pathname === path : pathname.startsWith(path)
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton

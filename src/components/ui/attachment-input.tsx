@@ -11,7 +11,6 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@/components/ui/attachment"
-import { Input } from "@/components/ui/input"
 
 type AttachmentInputProps = Omit<React.ComponentProps<"input">, "type"> & {
   label?: string
@@ -42,7 +41,7 @@ export const AttachmentInput = React.forwardRef<HTMLInputElement, AttachmentInpu
 
     return (
       <span className="block min-w-0">
-        <Input
+        <input
           {...props}
           accept={accept}
           className="sr-only"

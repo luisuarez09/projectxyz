@@ -6,19 +6,23 @@ import { useMemo, useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { authClient } from "@/modules/identity/infrastructure/auth-client"
 
-const invite = {
-  firm: "Firma Contable Suárez & Asociados",
-  name: "Daniela Ruiz",
-  email: "daniela.ruiz@firma.com",
-  role: "Colaboradora",
+type InvitationView = {
+  firmName: string
+  name: string
+  email: string
+  roleName: string
+  expiresAt: string
 }
 
-export function InvitationForm() {
+export function InvitationForm({ invitation, token }: { invitation: InvitationView | null; token: string }) {
   const [password, setPassword] = useState("")
   const [confirmation, setConfirmation] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [accepted, setAccepted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   const checks = useMemo(() => [
     { label: "12 caracteres o más", valid: password.length >= 12 },
@@ -30,9 +34,48 @@ export function InvitationForm() {
   const matches = password.length > 0 && password === confirmation
   const valid = checks.every((check) => check.valid) && matches
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (valid) setAccepted(true)
+    if (!valid || !invitation) return
+
+    setSubmitting(true)
+    setError("")
+    const signUp = await authClient.signUp.email({
+      email: invitation.email,
+      name: invitation.name,
+      password,
+    }, {
+      headers: { "x-proyectoxyz-invitation": token },
+    })
+
+    if (signUp.error) {
+      setSubmitting(false)
+      setError("No fue posible activar la invitación. Solicita un enlace nuevo al administrador.")
+      return
+    }
+
+    const completion = await fetch("/api/invitations/complete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+    })
+    setSubmitting(false)
+
+    if (!completion.ok) {
+      setError("La cuenta fue creada, pero no se pudo asignar el acceso. Contacta al administrador.")
+      return
+    }
+
+    setAccepted(true)
+  }
+
+  if (!invitation) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-white p-7 text-center shadow-sm">
+        <h2 className="text-xl font-semibold">Invitación no disponible</h2>
+        <p className="mt-2 text-sm leading-6 text-stone-600">El enlace no es válido, venció o ya fue utilizado. Solicita una invitación nueva al administrador de la firma.</p>
+      </div>
+    )
   }
 
   if (accepted) {
@@ -40,8 +83,8 @@ export function InvitationForm() {
       <div className="rounded-2xl border border-emerald-200 bg-white p-7 text-center shadow-sm">
         <span className="mx-auto grid size-12 place-items-center rounded-full bg-emerald-50 text-emerald-700"><ShieldCheck size={25} /></span>
         <h2 className="mt-4 text-xl font-semibold">Tu cuenta está preparada</h2>
-        <p className="mt-2 text-sm leading-6 text-stone-600">La contraseña cumple los requisitos. Al conectar autenticación, este paso activará la cuenta y cerrará el enlace de invitación.</p>
-        <Button className="mt-6 h-11 w-full bg-[#14352d] text-white hover:bg-[#0c2720]" onClick={() => setAccepted(false)} type="button">Volver a revisar</Button>
+        <p className="mt-2 text-sm leading-6 text-stone-600">La invitación quedó cerrada y tu acceso ya está activo.</p>
+        <Button className="mt-6 h-11 w-full bg-[#14352d] text-white hover:bg-[#0c2720]" onClick={() => window.location.assign("/login")} type="button">Ir a iniciar sesión</Button>
       </div>
     )
   }
@@ -50,17 +93,17 @@ export function InvitationForm() {
     <div>
       <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <div className="flex items-start gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 font-semibold text-[#276252]">DR</span>
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 font-semibold text-[#276252]">{invitation.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
           <div className="min-w-0">
-            <p className="font-semibold text-stone-900">{invite.name}</p>
-            <p className="truncate text-sm text-stone-500">{invite.email}</p>
+            <p className="font-semibold text-stone-900">{invitation.name}</p>
+            <p className="truncate text-sm text-stone-500">{invitation.email}</p>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">{invite.role}</span>
+              <span className="rounded-full bg-stone-100 px-2.5 py-1 text-stone-600">{invitation.roleName}</span>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">Invitación verificada</span>
             </div>
           </div>
         </div>
-        <p className="mt-4 border-t border-stone-100 pt-3 text-xs leading-5 text-stone-500">Invitación enviada por {invite.firm}. Válida por 48 horas y para un solo uso.</p>
+        <p className="mt-4 border-t border-stone-100 pt-3 text-xs leading-5 text-stone-500">Invitación enviada por {invitation.firmName}. Válida hasta {new Intl.DateTimeFormat("es-VE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(invitation.expiresAt))} y para un solo uso.</p>
       </div>
 
       <form className="mt-6 space-y-4" onSubmit={submit}>
@@ -84,7 +127,8 @@ export function InvitationForm() {
           <Requirement label="Las contraseñas coinciden" valid={matches} />
         </div>
 
-        <Button className="h-11 w-full bg-[#14352d] text-white hover:bg-[#0c2720]" disabled={!valid} type="submit">Aceptar invitación y continuar</Button>
+        {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">{error}</p>}
+        <Button className="h-11 w-full bg-[#14352d] text-white hover:bg-[#0c2720]" disabled={!valid || submitting} type="submit">{submitting ? "Activando…" : "Aceptar invitación y continuar"}</Button>
       </form>
 
       <div className="mt-5 flex gap-2.5 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs leading-5 text-sky-900">

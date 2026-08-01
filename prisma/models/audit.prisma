@@ -1,0 +1,18 @@
+/// Append-only audit envelope. Transactional audit behavior is implemented in Phase 1.
+model AuditEvent {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  firmId      String?  @map("firm_id") @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  requestId   String   @map("request_id") @db.Uuid
+  eventType   String   @map("event_type")
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id") @db.Uuid
+  metadata    Json     @default("{}")
+
+  @@index([firmId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+  @@schema("audit")
+}

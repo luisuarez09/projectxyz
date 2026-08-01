@@ -4,6 +4,10 @@ node_modules/
 out/
 coverage/
 .npm-cache/
+src/generated/prisma/
+playwright-report/
+test-results/
+*.tsbuildinfo
 
 # Environment and secrets
 .env

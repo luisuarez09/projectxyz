@@ -1,0 +1,359 @@
+enum UserProfileType {
+  STAFF
+  CLIENT
+
+  @@schema("app")
+}
+
+enum FirmClientStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("app")
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+
+  @@schema("app")
+}
+
+enum AssignmentScope {
+  FIRM
+  COMPANY
+  BRANCH
+
+  @@schema("app")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+
+  @@schema("app")
+}
+
+enum StoredObjectStatus {
+  PENDING
+  QUARANTINED
+  AVAILABLE
+  REJECTED
+  ARCHIVED
+
+  @@schema("app")
+}
+
+/// Tenant anchor retained even while the product launches with one firm.
+model Firm {
+  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  legalName       String           @map("legal_name")
+  tradeName       String?          @map("trade_name")
+  rif             String?          @unique
+  email           String?
+  phone           String?
+  fiscalAddress   String?          @map("fiscal_address")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version         Int              @default(1)
+  profiles        UserProfile[]
+  clients         FirmClient[]
+  companies       Company[]
+  roles           Role[]
+  assignments     RoleAssignment[]
+  invitations     Invitation[]
+  storedObjects   StoredObject[]
+  documents       Document[]
+
+  @@map("firms")
+  @@schema("app")
+}
+
+/// Application-owned data associated with a Better Auth identity.
+model UserProfile {
+  id          String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId      String          @unique @map("user_id") @db.Uuid
+  firmId      String          @map("firm_id") @db.Uuid
+  displayName String          @map("display_name")
+  profileType UserProfileType @default(STAFF) @map("profile_type")
+  position    String?
+  profession  String?
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version     Int             @default(1)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  firm        Firm            @relation(fields: [firmId], references: [id], onDelete: Restrict)
+
+  @@index([firmId])
+  @@map("user_profiles")
+  @@schema("app")
+}
+
+model FirmClient {
+  id           String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId       String           @map("firm_id") @db.Uuid
+  legalName    String           @map("legal_name")
+  rif          String?
+  contactName  String?          @map("contact_name")
+  contactEmail String?          @map("contact_email")
+  contactPhone String?          @map("contact_phone")
+  status       FirmClientStatus @default(ACTIVE)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version      Int              @default(1)
+  firm         Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  companies    FirmClientCompany[]
+
+  @@unique([firmId, rif])
+  @@index([firmId, status])
+  @@map("firm_clients")
+  @@schema("app")
+}
+
+model Company {
+  id              String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId          String        @map("firm_id") @db.Uuid
+  legalName       String        @map("legal_name")
+  tradeName       String?       @map("trade_name")
+  rif             String
+  normalizedRif   String        @map("normalized_rif")
+  activity        String?
+  taxpayerType    String?       @map("taxpayer_type")
+  fiscalAddress   String?       @map("fiscal_address")
+  contactName     String?       @map("contact_name")
+  contactEmail    String?       @map("contact_email")
+  contactPhone    String?       @map("contact_phone")
+  status          CompanyStatus @default(ACTIVE)
+  archivedAt      DateTime?     @map("archived_at") @db.Timestamptz(6)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version         Int           @default(1)
+  firm            Firm          @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  clients         FirmClientCompany[]
+  branches        Branch[]
+  roleAssignments RoleAssignment[]
+  invitations     Invitation[]
+  storedObjects   StoredObject[]
+  documents       Document[]
+
+  @@unique([firmId, normalizedRif])
+  @@index([firmId, status])
+  @@map("companies")
+  @@schema("app")
+}
+
+model FirmClientCompany {
+  firmClientId String     @map("firm_client_id") @db.Uuid
+  companyId    String     @map("company_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  firmClient   FirmClient @relation(fields: [firmClientId], references: [id], onDelete: Restrict)
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@id([firmClientId, companyId])
+  @@index([companyId])
+  @@map("firm_client_companies")
+  @@schema("app")
+}
+
+model Branch {
+  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  companyId       String           @map("company_id") @db.Uuid
+  name            String
+  code            String?
+  address         String
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version         Int              @default(1)
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  roleAssignments RoleAssignment[]
+  invitations     Invitation[]
+
+  @@unique([companyId, name])
+  @@index([companyId, active])
+  @@map("branches")
+  @@schema("app")
+}
+
+model Permission {
+  key             String           @id
+  description     String
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+  @@schema("app")
+}
+
+model Role {
+  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId          String           @map("firm_id") @db.Uuid
+  name            String
+  slug            String
+  description     String?
+  isSystem        Boolean          @default(false) @map("is_system")
+  archivedAt      DateTime?        @map("archived_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version         Int              @default(1)
+  firm            Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  permissions     RolePermission[]
+  assignments     RoleAssignment[]
+  invitations     Invitation[]
+
+  @@unique([firmId, slug])
+  @@index([firmId, archivedAt])
+  @@map("roles")
+  @@schema("app")
+}
+
+model RolePermission {
+  roleId        String     @map("role_id") @db.Uuid
+  permissionKey String     @map("permission_key")
+  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Restrict)
+
+  @@id([roleId, permissionKey])
+  @@index([permissionKey])
+  @@map("role_permissions")
+  @@schema("app")
+}
+
+model RoleAssignment {
+  id         String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId     String          @map("firm_id") @db.Uuid
+  userId     String          @map("user_id") @db.Uuid
+  roleId     String          @map("role_id") @db.Uuid
+  scope      AssignmentScope
+  companyId  String?         @map("company_id") @db.Uuid
+  branchId   String?         @map("branch_id") @db.Uuid
+  validFrom  DateTime        @default(now()) @map("valid_from") @db.Timestamptz(6)
+  validUntil DateTime?       @map("valid_until") @db.Timestamptz(6)
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  firm       Firm            @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  role       Role            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  company    Company?        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch     Branch?         @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, roleId, scope, companyId, branchId])
+  @@index([firmId, userId])
+  @@index([companyId])
+  @@index([branchId])
+  @@map("role_assignments")
+  @@schema("app")
+}
+
+model Invitation {
+  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId          String           @map("firm_id") @db.Uuid
+  email           String
+  name            String
+  profileType     UserProfileType  @default(STAFF) @map("profile_type")
+  roleId          String           @map("role_id") @db.Uuid
+  scope           AssignmentScope
+  companyId       String?          @map("company_id") @db.Uuid
+  branchId        String?          @map("branch_id") @db.Uuid
+  tokenHash       String           @unique @map("token_hash")
+  status          InvitationStatus @default(PENDING)
+  expiresAt       DateTime         @map("expires_at") @db.Timestamptz(6)
+  invitedByUserId String           @map("invited_by_user_id") @db.Uuid
+  acceptedByUserId String?         @map("accepted_by_user_id") @db.Uuid
+  acceptedAt      DateTime?        @map("accepted_at") @db.Timestamptz(6)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  firm            Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  role            Role             @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  invitedBy       User             @relation("InvitationSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  acceptedBy      User?            @relation("InvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([firmId, email, status])
+  @@index([expiresAt, status])
+  @@map("invitations")
+  @@schema("app")
+}
+
+model StoredObject {
+  id              String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId          String             @map("firm_id") @db.Uuid
+  companyId       String?            @map("company_id") @db.Uuid
+  uploadedByUserId String            @map("uploaded_by_user_id") @db.Uuid
+  bucket          String
+  objectKey       String             @map("object_key")
+  originalName    String             @map("original_name")
+  declaredMime    String             @map("declared_mime")
+  detectedMime    String?            @map("detected_mime")
+  sizeBytes       BigInt             @map("size_bytes")
+  checksumSha256  String             @map("checksum_sha256")
+  status          StoredObjectStatus @default(PENDING)
+  rejectionReason String?            @map("rejection_reason")
+  scannedAt       DateTime?          @map("scanned_at") @db.Timestamptz(6)
+  availableAt     DateTime?          @map("available_at") @db.Timestamptz(6)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  firm            Firm               @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company         Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  uploadedBy      User               @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  documentVersions DocumentVersion[]
+
+  @@unique([bucket, objectKey])
+  @@index([firmId, companyId, status])
+  @@index([checksumSha256])
+  @@map("stored_objects")
+  @@schema("app")
+}
+
+model Document {
+  id        String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId    String            @map("firm_id") @db.Uuid
+  companyId String?           @map("company_id") @db.Uuid
+  title     String
+  category  String
+  createdAt DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version   Int               @default(1)
+  firm      Firm              @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company   Company?          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  versions  DocumentVersion[]
+  links     DocumentLink[]
+
+  @@index([firmId, companyId, category])
+  @@map("documents")
+  @@schema("app")
+}
+
+model DocumentVersion {
+  id              String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  documentId      String       @map("document_id") @db.Uuid
+  storedObjectId  String       @unique @map("stored_object_id") @db.Uuid
+  versionNumber   Int          @map("version_number")
+  createdByUserId String       @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  document        Document     @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  storedObject    StoredObject @relation(fields: [storedObjectId], references: [id], onDelete: Restrict)
+  createdBy       User         @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, versionNumber])
+  @@index([createdByUserId])
+  @@map("document_versions")
+  @@schema("app")
+}
+
+model DocumentLink {
+  id         String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, entityType, entityId])
+  @@index([entityType, entityId])
+  @@map("document_links")
+  @@schema("app")
+}

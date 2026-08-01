@@ -7,6 +7,7 @@ import { useState, type FormEvent } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { authClient } from "@/modules/identity/infrastructure/auth-client"
 
 type RecoveryMode = "usuario" | "contrasena"
 
@@ -14,14 +15,25 @@ export function RecoveryForm() {
   const searchParams = useSearchParams()
   const [mode, setMode] = useState<RecoveryMode>(searchParams.get("tipo") === "usuario" ? "usuario" : "contrasena")
   const [sent, setSent] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   function selectMode(nextMode: RecoveryMode) {
     setMode(nextMode)
     setSent(false)
   }
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (mode === "contrasena") {
+      const form = new FormData(event.currentTarget)
+      const email = String(form.get("email") ?? "").trim().toLowerCase()
+      setSubmitting(true)
+      await authClient.requestPasswordReset({
+        email,
+        redirectTo: "/restablecer-contrasena",
+      })
+      setSubmitting(false)
+    }
     setSent(true)
   }
 
@@ -72,8 +84,8 @@ export function RecoveryForm() {
           </>
         )}
 
-        <Button className="h-11 w-full bg-[#14352d] text-white hover:bg-[#0c2720]" type="submit">
-          {mode === "usuario" ? "Solicitar verificación" : "Enviar enlace seguro"} <ArrowRight size={16} />
+        <Button className="h-11 w-full bg-[#14352d] text-white hover:bg-[#0c2720]" disabled={submitting} type="submit">
+          {submitting ? "Enviando…" : mode === "usuario" ? "Solicitar verificación" : "Enviar enlace seguro"} {!submitting && <ArrowRight size={16} />}
         </Button>
       </form>
 

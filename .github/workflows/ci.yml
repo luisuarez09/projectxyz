@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      DIRECT_DATABASE_URL: postgresql://proyectoxyz_migrator:local_migrator_password@localhost:55432/proyectoxyz
+      DATABASE_URL: postgresql://proyectoxyz_app:local_app_password@localhost:55432/proyectoxyz
+      S3_ENDPOINT: http://localhost:8333
+      S3_REGION: us-east-1
+      S3_BUCKET: proyectoxyz-private
+      S3_ACCESS_KEY_ID: local_s3_access_key
+      S3_SECRET_ACCESS_KEY: local_s3_secret_key
+      CLAMAV_HOST: localhost
+      CLAMAV_PORT: "3310"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run db:generate
+      - run: docker compose up -d --wait postgres seaweedfs clamav
+      - run: npm run db:deploy
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run lint
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+      - if: always()
+        run: docker compose logs --no-color postgres seaweedfs clamav

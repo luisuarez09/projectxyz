@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   ChevronDown,
+  ClipboardCheck,
   Landmark,
   ReceiptText,
   Settings2,
@@ -12,8 +13,8 @@ import {
   WalletCards,
 } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
+import { Suspense, useEffect, useState } from "react"
 
 import {
   SidebarGroup,
@@ -31,6 +32,7 @@ const primaryItems = [
   { label: "Resumen", href: "/", icon: Landmark },
   { label: "Empresas", href: "/empresas", icon: Building2 },
   { label: "Calendario", href: "/calendario", icon: CalendarDays },
+  { label: "Cumplimiento", href: "/cumplimiento", icon: ClipboardCheck },
   { label: "Archivo", href: "/archivo", icon: Archive },
   { label: "Equipo", href: "/equipo", icon: UsersRound },
 ]
@@ -106,15 +108,17 @@ export function SidebarNavigation(_legacyProps?: { active?: string }) {
         <SidebarGroupContent>
           <SidebarMenu>
             <CollapsibleItem active={operationsActive} icon={ReceiptText} label="Operaciones" onToggle={() => toggleSection("operations")} open={openSection === "operations"}>
-              {operations.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
+              <Suspense fallback={operations.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}>
+                <OperationsSubItems pathname={pathname} />
+              </Suspense>
             </CollapsibleItem>
             <NavItem href="/declaraciones" icon={ReceiptText} label="Declaraciones" pathname={pathname} />
             <NavItem href="/servicios" icon={WalletCards} label="Servicios" pathname={pathname} />
             <CollapsibleItem active={employeesActive} icon={UsersRound} label="Empleados" onToggle={() => toggleSection("employees")} open={openSection === "employees"}>
               {employees.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
             </CollapsibleItem>
-            <NavItem href="/compromisos-de-pago" icon={Landmark} label="Compromisos de pago" pathname={pathname} />
-            <CollapsibleItem active={companySettingsActive} icon={Settings2} label="Configuración empresa" onToggle={() => toggleSection("company-settings")} open={openSection === "company-settings"}>
+            <NavItem href="/compromisos-de-pago" icon={Landmark} label="Compromisos" pathname={pathname} />
+            <CollapsibleItem active={companySettingsActive} icon={Settings2} label="Configuración" onToggle={() => toggleSection("company-settings")} open={openSection === "company-settings"}>
               {companySettings.map((item) => <SubItem href={item.href} key={item.href} label={item.label} pathname={pathname} />)}
             </CollapsibleItem>
           </SidebarMenu>
@@ -160,9 +164,31 @@ function CollapsibleItem({ active, children, icon: Icon, label, onToggle, open }
   )
 }
 
-function SubItem({ href, label, pathname }: { href: string; label: string; pathname: string }) {
+function OperationsSubItems({ pathname }: { pathname: string }) {
+  const searchParams = useSearchParams()
+  const currentTab = searchParams.get("tab")
+
+  return operations.map((item) => (
+    <SubItem
+      currentTab={currentTab}
+      href={item.href}
+      key={item.href}
+      label={item.label}
+      pathname={pathname}
+    />
+  ))
+}
+
+function SubItem({ href, label, pathname, currentTab }: { href: string; label: string; pathname: string; currentTab?: string | null }) {
   const path = href.split("?")[0]
-  const active = path === "/operaciones" || path === "/empleados" || path === "/configuracion/empresa" ? pathname === path : pathname.startsWith(path)
+  const targetTab = href.includes("?") ? new URLSearchParams(href.split("?")[1]).get("tab") : null
+  const active = targetTab
+    ? pathname === path && currentTab === targetTab
+    : path === "/operaciones/ventas"
+      ? pathname.startsWith(path) && currentTab !== "retenciones"
+      : path === "/operaciones" || path === "/empleados" || path === "/configuracion/empresa"
+        ? pathname === path
+        : pathname.startsWith(path)
   return (
     <SidebarMenuSubItem>
       <SidebarMenuSubButton

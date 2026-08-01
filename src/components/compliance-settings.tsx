@@ -1,0 +1,52 @@
+"use client"
+
+import { AlertTriangle, ArrowLeft, BookOpenCheck, CalendarRange, CheckCircle2, FilePlus2, Info, MoreHorizontal, Plus, Scale, Settings2, ShieldCheck } from "lucide-react"
+import Link from "next/link"
+import { useState } from "react"
+
+import { ScoreScale } from "@/components/compliance-score"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { complianceSections, sourceCatalog, totalComplianceQuestions } from "@/lib/compliance-demo"
+
+type Tab = "parameters" | "sources" | "scoring"
+
+export function ComplianceSettings() {
+  const [tab, setTab] = useState<Tab>("parameters")
+  const [notice, setNotice] = useState("")
+  const notify = (message: string) => { setNotice(message); window.setTimeout(() => setNotice(""), 3500) }
+
+  return (
+    <main className="min-h-screen bg-[#f7f7f4] text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+      {notice && <div className="fixed right-4 top-20 z-50 max-w-sm rounded-xl border border-stone-200 bg-white p-4 text-sm shadow-xl dark:border-stone-700 dark:bg-stone-900" role="status">{notice}</div>}
+      <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-10">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><Link className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-900" href="/cumplimiento"><ArrowLeft size={15} /> Cumplimiento</Link><h1 className="mt-3 text-3xl font-semibold tracking-tight">Configuración de cumplimiento</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600 dark:text-stone-300">Versiona preguntas, fuentes, aplicabilidad y pesos antes de usarlos en una evaluación.</p></div><Button className="bg-[#14352d] hover:bg-[#0e2821]" onClick={() => notify("El alta de parámetros requiere persistencia y flujo de aprobación.")}><Plus /> Nuevo parámetro</Button></div>
+
+        <div className="mt-6 flex gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100"><Info className="mt-0.5 shrink-0" size={18} /><p className="leading-6"><strong>Separación necesaria:</strong> la ley define el deber, su alcance y posibles consecuencias; la firma define el peso metodológico. Cambiar un peso nunca debe alterar la fuente legal ni recalcular evaluaciones históricas ya finalizadas.</p></div>
+
+        <nav className="mt-6 flex gap-1 overflow-x-auto rounded-xl border border-stone-200 bg-white p-1 dark:border-stone-800 dark:bg-stone-900" aria-label="Configuración de cumplimiento">{(["parameters", "sources", "scoring"] as Tab[]).map((item) => <button className={`min-w-max rounded-lg px-4 py-2 text-sm font-medium transition ${tab === item ? "bg-[#14352d] text-white" : "text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"}`} key={item} onClick={() => setTab(item)} type="button">{{ parameters: "Parámetros", sources: "Fuentes legales", scoring: "Escala y metodología" }[item]}</button>)}</nav>
+
+        {tab === "parameters" && <Parameters notify={notify} />}
+        {tab === "sources" && <Sources notify={notify} />}
+        {tab === "scoring" && <Scoring />}
+      </div>
+    </main>
+  )
+}
+
+function Parameters({ notify }: { notify: (message: string) => void }) {
+  return <div className="mt-6"><section className="grid gap-4 sm:grid-cols-3"><Summary icon={Settings2} label="Parámetros" value={String(totalComplianceQuestions)} note="Importados como borrador" /><Summary icon={BookOpenCheck} label="Con fuente aprobada" value="0" note="Requiere revisión profesional" /><Summary icon={CalendarRange} label="Versión" value="Borrador 0.1" note="Sin evaluaciones definitivas" /></section><Card className="mt-5 border-0 shadow-sm"><CardHeader><CardTitle>Secciones del formulario</CardTitle><CardDescription>Catálogo inicial basado en el archivo DEBERES FORMALES.xlsx</CardDescription></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/50"><tr><th className="px-5 py-3 font-medium">Sección</th><th className="px-4 py-3 font-medium">Preguntas</th><th className="px-4 py-3 font-medium">Aplicabilidad</th><th className="px-4 py-3 font-medium">Estado legal</th><th className="px-5 py-3 text-right font-medium">Acciones</th></tr></thead><tbody className="divide-y divide-stone-100 dark:divide-stone-800">{complianceSections.map((section) => <tr key={section.id}><td className="px-5 py-4"><p className="font-semibold">{section.title}</p><p className="mt-1 max-w-lg text-xs text-stone-500">{section.description}</p></td><td className="px-4 py-4 font-semibold">{section.questions.length}</td><td className="px-4 py-4 text-xs text-stone-500">Por empresa y jurisdicción</td><td className="px-4 py-4"><Badge className="border-amber-200 bg-amber-50 text-amber-700" variant="outline">Por validar</Badge></td><td className="px-5 py-4 text-right"><Button onClick={() => notify(`Edición de ${section.shortTitle} preparada para una fase posterior.`)} size="sm" variant="ghost">Abrir</Button><Button aria-label={`Más acciones de ${section.title}`} size="icon-sm" variant="ghost"><MoreHorizontal /></Button></td></tr>)}</tbody></table></div></CardContent></Card></div>
+}
+
+function Sources({ notify }: { notify: (message: string) => void }) {
+  return <div className="mt-6"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-semibold">Biblioteca normativa</h2><p className="mt-1 text-sm text-stone-500">Cada versión debe conservar documento, artículos, jurisdicción, vigencia y responsable de aprobación.</p></div><Button onClick={() => notify("La carga documental requiere almacenamiento privado y auditoría.")} variant="outline"><FilePlus2 /> Cargar fuente</Button></div><div className="grid gap-4 lg:grid-cols-2">{sourceCatalog.map((source) => <Card className="border-0 shadow-sm" key={source.id}><CardContent className="pt-4"><div className="flex items-start justify-between gap-4"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-stone-100 text-stone-500 dark:bg-stone-800"><BookOpenCheck size={18} /></span><Badge className={source.status === "Referencia localizada" ? "border-sky-200 bg-sky-50 text-sky-700" : source.status === "Sin cargar" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-amber-200 bg-amber-50 text-amber-700"} variant="outline">{source.status}</Badge></div><h3 className="mt-4 font-semibold">{source.name}</h3><p className="mt-1 text-sm text-stone-600 dark:text-stone-300">{source.reference}</p><div className="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-stone-50 p-3 text-xs dark:bg-stone-800"><div><p className="text-stone-400">Ámbito</p><p className="mt-1 font-medium">{source.scope}</p></div><div><p className="text-stone-400">Vigencia</p><p className="mt-1 font-medium">{source.validity}</p></div></div><Button className="mt-4 w-full" onClick={() => notify(`Revisión de ${source.name} requiere responsable y aprobación.`)} variant="outline">Revisar versión</Button></CardContent></Card>)}</div></div>
+}
+
+function Scoring() {
+  return <div className="mt-6 grid gap-5 xl:grid-cols-[1fr_0.85fr]"><Card className="border-0 shadow-sm"><CardHeader><CardTitle>Índice de preparación formal</CardTitle><CardDescription>Metodología interna propuesta · versión borrador 0.1</CardDescription></CardHeader><CardContent><ScoreScale /><div className="mt-6 space-y-4 text-sm"><Rule number="1" title="Puntaje ponderado"><span>Sí suma el peso completo; No suma cero; No aplica se excluye del denominador.</span></Rule><Rule number="2" title="Preguntas pendientes"><span>Un formulario no puede finalizar mientras tenga respuestas pendientes aplicables.</span></Rule><Rule number="3" title="Riesgo aceptado"><span>Cierra la acción operativa, pero mantiene el incumplimiento visible y no mejora el puntaje.</span></Rule><Rule number="4" title="Versionado"><span>La evaluación conserva una copia de preguntas, pesos y fuentes vigentes al momento de finalizar.</span></Rule></div></CardContent></Card><div className="space-y-5"><Card className="border-0 shadow-sm"><CardHeader><CardTitle>Pesos internos propuestos</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><Weight label="Crítica" value="3" tone="bg-rose-500" description="Exposición inmediata o transversal" /><Weight label="Alta" value="2" tone="bg-amber-500" description="Deficiencia relevante que requiere plan" /><Weight label="Media" value="1" tone="bg-sky-500" description="Soporte o control formal mejorable" /></CardContent></Card><div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900"><AlertTriangle className="mt-0.5 shrink-0" size={16} /><p>Los pesos expresan prioridad de la firma, no gravedad jurídica automática. Deben aprobarse por un responsable y documentar el criterio utilizado.</p></div></div></div>
+}
+
+function Summary({ icon: Icon, label, value, note }: { icon: typeof Settings2; label: string; value: string; note: string }) { return <Card className="border-0 shadow-sm"><CardContent className="flex items-start justify-between pt-4"><div><p className="text-sm text-stone-500">{label}</p><p className="mt-2 text-3xl font-semibold">{value}</p><p className="mt-1 text-xs text-stone-500">{note}</p></div><span className="grid size-9 place-items-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950"><Icon size={18} /></span></CardContent></Card> }
+function Rule({ number, title, children }: { number: string; title: string; children: React.ReactNode }) { return <div className="flex gap-3"><span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#14352d] text-xs font-semibold text-white">{number}</span><div><p className="font-semibold">{title}</p><p className="mt-1 text-xs leading-5 text-stone-500">{children}</p></div></div> }
+function Weight({ label, value, tone, description }: { label: string; value: string; tone: string; description: string }) { return <div className="flex items-center gap-3 rounded-xl border border-stone-200 p-3 dark:border-stone-700"><span className={`size-2.5 rounded-full ${tone}`} /><div className="flex-1"><p className="font-semibold">{label}</p><p className="mt-0.5 text-xs text-stone-500">{description}</p></div><span className="text-xl font-semibold">{value}</span></div> }

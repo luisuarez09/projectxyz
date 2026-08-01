@@ -36,6 +36,7 @@ const companies = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
+  const isAuthPage = ["/login", "/recuperar-acceso", "/invitacion"].some((route) => pathname.startsWith(route))
   const companyArea = pathname.startsWith("/operaciones") || pathname.startsWith("/declaraciones") || pathname.startsWith("/servicios") || pathname.startsWith("/empleados") || pathname.startsWith("/compromisos-de-pago") || pathname.startsWith("/configuracion/empresa")
   const [company, setCompany] = useState(companyArea ? "roble" : "firm")
 
@@ -43,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (companyArea && company === "firm") setCompany("roble")
   }, [company, companyArea])
 
-  if (pathname.startsWith("/calendario/matriz/tv")) return children
+  if (pathname.startsWith("/calendario/matriz/tv") || isAuthPage) return children
 
   return (
     <SidebarProvider style={{ "--sidebar-width": "17.5rem" } as React.CSSProperties}>

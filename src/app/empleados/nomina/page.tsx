@@ -1,3 +1,3 @@
-import { PayrollWorkspace } from "@/components/payroll-workspace";
+import { PayrollDirectory } from "@/components/payroll-directory";
 
-export default function PayrollPage() { return <PayrollWorkspace />; }
+export default function PayrollPage() { return <PayrollDirectory />; }

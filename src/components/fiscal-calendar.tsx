@@ -136,6 +136,7 @@ export function FiscalCalendar({ initialPeriod, initialView = "due" }: { initial
   const [selectedId, setSelectedId] = useState("");
   const [filter, setFilter] = useState<DeadlineFilter>("ALL");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerSide, setDrawerSide] = useState<"bottom" | "right">("bottom");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -172,11 +173,18 @@ export function FiscalCalendar({ initialPeriod, initialView = "due" }: { initial
 
   useEffect(() => {
     const desktop = window.matchMedia("(min-width: 1280px)");
+    const tablet = window.matchMedia("(min-width: 640px)");
     const closeDrawerOnDesktop = () => {
       if (desktop.matches) setDrawerOpen(false);
     };
+    const updateDrawerSide = () => setDrawerSide(tablet.matches ? "right" : "bottom");
+    updateDrawerSide();
     desktop.addEventListener("change", closeDrawerOnDesktop);
-    return () => desktop.removeEventListener("change", closeDrawerOnDesktop);
+    tablet.addEventListener("change", updateDrawerSide);
+    return () => {
+      desktop.removeEventListener("change", closeDrawerOnDesktop);
+      tablet.removeEventListener("change", updateDrawerSide);
+    };
   }, []);
 
   const selected = data?.cases.find(({ id }) => id === selectedId) ?? null;
@@ -376,8 +384,8 @@ export function FiscalCalendar({ initialPeriod, initialView = "due" }: { initial
       <Sheet open={drawerOpen && Boolean(selected)} onOpenChange={setDrawerOpen}>
         {selected && (
           <SheetContent
-            className="max-h-[90vh] w-full gap-0 overflow-y-auto rounded-t-2xl p-5 sm:inset-y-0 sm:right-0 sm:bottom-auto sm:left-auto sm:h-full sm:max-h-none sm:w-105 sm:rounded-none sm:rounded-l-2xl sm:border-t-0 sm:border-l xl:hidden"
-            side="bottom"
+            className={drawerSide === "right" ? "w-full gap-0 overflow-y-auto p-5 sm:w-105 sm:max-w-none sm:rounded-none sm:rounded-l-2xl xl:hidden" : "max-h-[90vh] w-full gap-0 overflow-y-auto rounded-t-2xl p-5 xl:hidden"}
+            side={drawerSide}
           >
             <SheetHeader className="sr-only">
               <SheetTitle>Expediente del período</SheetTitle>

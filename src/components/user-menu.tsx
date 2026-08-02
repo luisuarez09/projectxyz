@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MobileThemeMenu } from "@/components/theme-toggle";
 import { useDismissableMenu } from "@/hooks/use-dismissable-menu";
 import { authClient } from "@/modules/identity/infrastructure/auth-client";
 
@@ -143,7 +144,8 @@ export function UserMenu() {
             </p>
           )}
           <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
-          <MenuItem icon={UserRound} label="Mi perfil" />
+          <MenuItem icon={UserRound} label="Mi perfil" onClick={() => { setIsOpen(false); router.push("/perfil"); }} />
+          <MobileThemeMenu />
           <MenuItem icon={Settings} label="Preferencias de la firma" />
           <MenuItem icon={KeyRound} label="Seguridad y acceso" />
           <MenuItem icon={CircleHelp} label="Ayuda y soporte" />

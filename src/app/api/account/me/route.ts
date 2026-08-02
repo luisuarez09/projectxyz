@@ -23,6 +23,7 @@ export async function GET(request: Request) {
               name: true,
               email: true,
               image: true,
+              twoFactorEnabled: true,
               roleAssignments: {
                 where: {
                   validFrom: { lte: now },
@@ -37,12 +38,14 @@ export async function GET(request: Request) {
         },
       });
       return {
+        id: auth.userId,
         name: profile.displayName || profile.user.name,
         email: profile.user.email,
         image: profile.user.image,
-        position:
-          profile.position || profile.profession || "Integrante de la firma",
+        position: profile.position || "Sin cargo definido",
+        profession: profile.profession || "Sin profesi\u00f3n definida",
         role: profile.user.roleAssignments[0]?.role.name ?? "Sin rol asignado",
+        mfaEnabled: Boolean(profile.user.twoFactorEnabled),
       };
     });
     return NextResponse.json({ account });

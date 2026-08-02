@@ -1,6 +1,7 @@
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
@@ -71,4 +72,13 @@ export async function deletePrivateObject(key: string) {
     Bucket: environment.S3_BUCKET,
     Key: key,
   }));
+}
+
+export async function getPrivateObject(key: string) {
+  const response = await client().send(new GetObjectCommand({
+    Bucket: environment.S3_BUCKET,
+    Key: key,
+  }));
+  if (!response.Body) throw new Error("El archivo almacenado no tiene contenido.");
+  return new Uint8Array(await response.Body.transformToByteArray());
 }

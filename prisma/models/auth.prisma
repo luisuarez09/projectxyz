@@ -18,6 +18,8 @@ model User {
   storedObjects             StoredObject[]
   documentVersions          DocumentVersion[]
   complianceEvidenceUploads ComplianceCaseEvidence[]
+  exchangeRatesRecorded     ExchangeRate[]            @relation("ExchangeRateRecorder")
+  exchangeRateSyncRuns      ExchangeRateSyncRun[]     @relation("ExchangeRateSyncInitiator")
 
   @@map("users")
   @@schema("auth")

@@ -325,6 +325,7 @@ function deadlineStatus(status: string, dueDate: Date | null) {
 }
 
 const caseInclude = {
+  offering: { select: { key: true } },
   company: {
     select: {
       legalName: true,
@@ -354,6 +355,7 @@ function serializeCase(
     business: item.company.activity ?? "Actividad sin especificar",
     owner: item.assignedProfile?.displayName ?? item.company.responsibleProfile?.displayName ?? "Sin responsable",
     offeringId: item.offeringId,
+    offeringKey: item.offering.key,
     offeringName: item.offeringName,
     offeringKind: item.offeringKind,
     organism: item.organism,

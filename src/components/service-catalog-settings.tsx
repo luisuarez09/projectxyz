@@ -3,6 +3,7 @@
 import {
   CalendarDays,
   Check,
+  ListOrdered,
   LoaderCircle,
   Pencil,
   Plus,
@@ -10,7 +11,10 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { ArchiveOrderDialog } from "@/components/archive-order-dialog";
+import { CalendarReconciliationPanel } from "@/components/calendar-reconciliation-panel";
 import { DeadlineRuleFields } from "@/components/deadline-rule-fields";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -46,15 +50,18 @@ const emptyService: FirmOffering = {
   appliesFrom: "",
   appliesTo: "",
   active: true,
+  archiveOrder: 1000,
 };
 
 export function ServiceCatalogSettings() {
   const [rules, setRules] = useState<FirmOffering[]>([]);
   const [draft, setDraft] = useState<FirmOffering | null>(null);
   const [removing, setRemoving] = useState<FirmOffering | null>(null);
+  const [organizing, setOrganizing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canReconcile, setCanReconcile] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -65,6 +72,7 @@ export function ServiceCatalogSettings() {
       setRules(
         body.offerings.filter((item: FirmOffering) => item.kind === "SERVICE"),
       );
+      setCanReconcile(Boolean(body.canReconcile));
       setError(null);
     } catch (reason) {
       setError(
@@ -150,15 +158,25 @@ export function ServiceCatalogSettings() {
             configuración de cada empresa.
           </p>
         </div>
-        <button
-          className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#14352d] px-3 text-sm font-medium text-white hover:bg-[#0e2821]"
-          onClick={() =>
-            setDraft({ ...emptyService, deadline: { ...emptyDeadlineRule } })
-          }
-          type="button"
-        >
-          <Plus size={16} /> Crear servicio
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:bg-stone-800"
+            disabled={loading || rules.length === 0}
+            onClick={() => setOrganizing(true)}
+            type="button"
+          >
+            <ListOrdered size={16} /> Organizar impresión
+          </button>
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#14352d] px-3 text-sm font-medium text-white hover:bg-[#0e2821]"
+            onClick={() =>
+              setDraft({ ...emptyService, deadline: { ...emptyDeadlineRule } })
+            }
+            type="button"
+          >
+            <Plus size={16} /> Crear servicio
+          </button>
+        </div>
       </div>
       {error && (
         <p className="mt-5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
@@ -175,6 +193,7 @@ export function ServiceCatalogSettings() {
           prestador.
         </p>
       </section>
+      {canReconcile && <CalendarReconciliationPanel />}
       <section className="mt-6 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
         <div className="border-b border-stone-100 p-5 dark:border-stone-800">
           <h2 className="font-semibold">Reglas disponibles</h2>
@@ -190,7 +209,7 @@ export function ServiceCatalogSettings() {
               <LoaderCircle className="animate-spin text-stone-400" />
             </div>
           ) : (
-            <Table className="min-w-[760px] w-full text-left text-sm">
+            <Table className="min-w-[900px] w-full text-left text-sm">
               <TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70">
                 <TableRow>
                   <TableHead className="px-5 py-3">Tipo de servicio</TableHead>
@@ -198,6 +217,7 @@ export function ServiceCatalogSettings() {
                   <TableHead className="px-3 py-3">
                     Cálculo del vencimiento
                   </TableHead>
+                  <TableHead className="px-3 py-3">Aplicar desde</TableHead>
                   <TableHead className="px-3 py-3">Estado</TableHead>
                   <TableHead className="px-5 py-3" />
                 </TableRow>
@@ -217,6 +237,9 @@ export function ServiceCatalogSettings() {
                         />
                         {formatDeadlineRule(rule.deadline)}
                       </span>
+                    </TableCell>
+                    <TableCell className="px-3 py-4 text-sm text-stone-600 dark:text-stone-300">
+                      {rule.appliesFrom || "Sin definir"}
                     </TableCell>
                     <TableCell className="px-3 py-4">
                       <div className="flex items-center gap-2">
@@ -275,6 +298,14 @@ export function ServiceCatalogSettings() {
           onChange={setDraft}
           onClose={() => setDraft(null)}
           onSave={() => void persist(draft)}
+        />
+      )}
+      {organizing && (
+        <ArchiveOrderDialog
+          items={rules}
+          kind="SERVICE"
+          onClose={() => setOrganizing(false)}
+          onSaved={setRules}
         />
       )}
       {removing && (
@@ -379,6 +410,20 @@ function RuleForm({
             onChange={(deadline) => onChange({ ...draft, deadline })}
             value={draft.deadline}
           />
+          <label className="field-label sm:col-span-2">
+            Aplicar a períodos desde
+            <DatePicker
+              className="field mt-1.5"
+              onChange={(event) =>
+                onChange({ ...draft, appliesFrom: event.target.value })
+              }
+              value={draft.appliesFrom}
+            />
+            <span className="mt-1.5 block text-xs font-normal leading-5 text-stone-500">
+              El calendario generará expedientes para este servicio a partir de
+              este período. Usa conciliación para revisar y aplicar el ajuste.
+            </span>
+          </label>
         </div>
         <div className="mt-6 flex justify-end gap-2">
           <button

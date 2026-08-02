@@ -25,6 +25,16 @@ async function main() {
       update: { legalName: "Luis Suarez", entityType: "NATURAL_PERSON", email },
       create: { legalName: "Luis Suarez", entityType: "NATURAL_PERSON", rif: "V-238572602", email },
     });
+    for (const currency of [
+      { code: "USD", name: "Dólar estadounidense", symbol: "$" },
+      { code: "EUR", name: "Euro", symbol: "€" },
+    ]) {
+      await transaction.firmCurrency.upsert({
+        where: { firmId_code: { firmId: firm.id, code: currency.code } },
+        update: { name: currency.name, symbol: currency.symbol, source: "BCV", sourceName: "Banco Central de Venezuela", sourceUrl: "https://www.bcv.org.ve/", automaticEnabled: true, active: true },
+        create: { firmId: firm.id, ...currency, source: "BCV", sourceName: "Banco Central de Venezuela", sourceUrl: "https://www.bcv.org.ve/", automaticEnabled: true, active: true },
+      });
+    }
 
     const documentDate = { deadlineMode: "document-date", deadlineDayCount: 0, deadlineDayType: "calendar", deadlineBase: "document-date" };
     const businessDays = (deadlineDayCount: number) => ({ deadlineMode: "days", deadlineDayCount, deadlineDayType: "business", deadlineBase: "period-start" });

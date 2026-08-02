@@ -59,7 +59,8 @@ const offeringFields = z.object({
     .max(5)
     .refine(
       (requirements) =>
-        new Set(requirements.map(({ kind }) => kind)).size === requirements.length,
+        new Set(requirements.map(({ kind }) => kind)).size ===
+        requirements.length,
       "No repitas tipos de soporte.",
     )
     .default([]),
@@ -70,10 +71,22 @@ const offeringFields = z.object({
   appliesFrom: nullableDate,
   appliesTo: nullableDate,
   active: z.boolean(),
+  archiveOrder: z.number().int().min(1).max(9999).default(1000),
 });
 const createOfferingSchema = offeringFields;
 const updateOfferingSchema = offeringFields.extend({
   version: z.number().int().positive(),
+});
+const archiveOrderSchema = z.object({
+  kind: z.enum(["TAX", "SERVICE"]),
+  orderedIds: z
+    .array(z.uuid())
+    .min(1)
+    .max(200)
+    .refine(
+      (ids) => new Set(ids).size === ids.length,
+      "No repitas elementos en el orden de archivo.",
+    ),
 });
 const taxRateSchema = z.object({
   id: z.union([z.literal(""), z.uuid()]),
@@ -176,6 +189,7 @@ function serializeOffering(
     appliesFrom: isoDate(offering.effectiveFrom),
     appliesTo: isoDate(offering.effectiveTo),
     active: offering.active,
+    archiveOrder: offering.archiveOrder,
   };
 }
 
@@ -284,7 +298,7 @@ export async function getFirmCatalog(auth: AuthContext) {
       transaction.firmOffering.findMany({
         where: { firmId: auth.firmId },
         include: catalogInclude,
-        orderBy: [{ kind: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ archiveOrder: "asc" }, { kind: "asc" }, { name: "asc" }],
       }),
       transaction.fiscalCalendar.findMany({
         where: { firmId: auth.firmId },
@@ -347,9 +361,17 @@ function offeringData(input: z.infer<typeof offeringFields>) {
     needsSpecialRule &&
     (input.speFrequency === "No aplica" || !input.speCalendarGroup)
   )
-    throw new Error("Configura la periodicidad y la matriz para contribuyentes especiales.");
-  if (input.active && input.kind === "TAX" && !input.evidenceRequirements.length)
-    throw new Error("Habilita al menos un soporte para el expediente del impuesto.");
+    throw new Error(
+      "Configura la periodicidad y la matriz para contribuyentes especiales.",
+    );
+  if (
+    input.active &&
+    input.kind === "TAX" &&
+    !input.evidenceRequirements.length
+  )
+    throw new Error(
+      "Habilita al menos un soporte para el expediente del impuesto.",
+    );
   return {
     kind: input.kind,
     taxpayerCondition:
@@ -358,7 +380,8 @@ function offeringData(input: z.infer<typeof offeringFields>) {
     organism: input.organism,
     frequency: input.frequency,
     speFrequency:
-      input.taxpayerCondition === "ORDINARY" || input.speFrequency === "No aplica"
+      input.taxpayerCondition === "ORDINARY" ||
+      input.speFrequency === "No aplica"
         ? null
         : input.speFrequency,
     deadlineMode: input.deadline.mode,
@@ -372,6 +395,7 @@ function offeringData(input: z.infer<typeof offeringFields>) {
     effectiveFrom: input.appliesFrom,
     effectiveTo: input.appliesTo,
     active: input.active,
+    archiveOrder: input.archiveOrder,
   };
 }
 
@@ -389,8 +413,23 @@ export async function createFirmOffering(auth: AuthContext, rawInput: unknown) {
       })
     )
       key = `${baseKey}-${suffix++}`;
+    const latestOffering = await transaction.firmOffering.findFirst({
+      where: { firmId: auth.firmId, kind: input.kind },
+      select: { archiveOrder: true },
+      orderBy: { archiveOrder: "desc" },
+    });
+    const archiveBase = input.kind === "TAX" ? 0 : 5000;
+    const archiveOrder = Math.min(
+      9999,
+      Math.max(archiveBase, latestOffering?.archiveOrder ?? archiveBase) + 10,
+    );
     const offering = await transaction.firmOffering.create({
-      data: { firmId: auth.firmId, key, ...offeringData(input) },
+      data: {
+        firmId: auth.firmId,
+        key,
+        ...offeringData(input),
+        archiveOrder,
+      },
       include: catalogInclude,
     });
     await syncOfferingCalendarGroup(
@@ -409,6 +448,52 @@ export async function createFirmOffering(auth: AuthContext, rawInput: unknown) {
         include: catalogInclude,
       }),
     );
+  });
+}
+
+export async function saveFirmOfferingOrder(
+  auth: AuthContext,
+  rawInput: unknown,
+) {
+  assertFirmAccess(auth, permissions.firmSettingsUpdate);
+  const input = archiveOrderSchema.parse(rawInput);
+  return withAuthTransaction(auth, async (transaction) => {
+    const existing = await transaction.firmOffering.findMany({
+      where: { firmId: auth.firmId, kind: input.kind },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map(({ id }) => id));
+    if (
+      existing.length !== input.orderedIds.length ||
+      input.orderedIds.some((id) => !existingIds.has(id))
+    )
+      throw new Error(
+        "El catálogo cambió mientras organizabas el archivo. Recarga e inténtalo nuevamente.",
+      );
+
+    const base = input.kind === "TAX" ? 0 : 5000;
+    for (const [index, id] of input.orderedIds.entries()) {
+      await transaction.firmOffering.updateMany({
+        where: { id, firmId: auth.firmId, kind: input.kind },
+        data: {
+          archiveOrder: base + (index + 1) * 10,
+          version: { increment: 1 },
+        },
+      });
+    }
+    await audit(
+      transaction,
+      auth,
+      "firm.offering.archive_order.updated",
+      auth.firmId,
+      { kind: input.kind, orderedIds: input.orderedIds },
+    );
+    const offerings = await transaction.firmOffering.findMany({
+      where: { firmId: auth.firmId, kind: input.kind },
+      include: catalogInclude,
+      orderBy: [{ archiveOrder: "asc" }, { name: "asc" }],
+    });
+    return offerings.map(serializeOffering);
   });
 }
 

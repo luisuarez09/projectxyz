@@ -123,6 +123,36 @@ enum ComplianceEvidenceKind {
   @@schema("app")
 }
 
+enum ExchangeRateSourceKind {
+  BCV
+  MANUAL
+
+  @@schema("app")
+}
+
+enum FirmCurrencySource {
+  BCV
+  MANUAL
+  EXTERNAL
+
+  @@schema("app")
+}
+
+enum ExchangeRateSyncTrigger {
+  AUTOMATIC
+  MANUAL
+
+  @@schema("app")
+}
+
+enum ExchangeRateSyncStatus {
+  SUCCEEDED
+  NO_CHANGE
+  FAILED
+
+  @@schema("app")
+}
+
 /// Tenant anchor retained even while the product launches with one firm.
 model Firm {
   id                 String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
@@ -135,6 +165,10 @@ model Firm {
   fiscalAddress      String?                  @map("fiscal_address")
   pdfHeader          String?                  @map("pdf_header")
   pdfFooter          String?                  @map("pdf_footer")
+  archivePaperSize   String                   @default("LETTER") @map("archive_paper_size")
+  exchangeRateSyncStart String                 @default("18:00") @map("exchange_rate_sync_start")
+  exchangeRateSyncEnd String                   @default("21:00") @map("exchange_rate_sync_end")
+  exchangeRateSyncInterval Int                 @default(30) @map("exchange_rate_sync_interval")
   logoStoredObjectId String?                  @unique @map("logo_stored_object_id") @db.Uuid
   createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -153,6 +187,9 @@ model Firm {
   fiscalCalendars    FiscalCalendar[]
   complianceCases    ComplianceCase[]
   complianceEvidence ComplianceCaseEvidence[]
+  exchangeRates      ExchangeRate[]
+  exchangeRateSyncRuns ExchangeRateSyncRun[]
+  currencies         FirmCurrency[]
   logoStoredObject   StoredObject?            @relation("FirmLogo", fields: [logoStoredObjectId], references: [id], onDelete: Restrict)
 
   @@map("firms")
@@ -209,6 +246,7 @@ model FirmOffering {
   effectiveFrom       DateTime?                       @map("effective_from") @db.Date
   effectiveTo         DateTime?                       @map("effective_to") @db.Date
   active              Boolean                         @default(false)
+  archiveOrder        Int                             @default(1000) @map("archive_order")
   createdAt           DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
   version             Int                             @default(1)
@@ -241,6 +279,81 @@ model TaxRate {
 
   @@index([firmId, offeringId, effectiveFrom])
   @@map("tax_rates")
+  @@schema("app")
+}
+
+/// Versioned exchange rate. A partial database index guarantees one current
+/// value per firm, currency and effective date without deleting prior values.
+model ExchangeRate {
+  id               String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId           String                 @map("firm_id") @db.Uuid
+  currency         String
+  rate             Decimal                @db.Decimal(20, 8)
+  effectiveDate    DateTime               @map("effective_date") @db.Date
+  sourceKind       ExchangeRateSourceKind @map("source_kind")
+  sourceUrl        String?                @map("source_url")
+  sourceHash       String?                @map("source_hash")
+  sourcePublishedAt DateTime?              @map("source_published_at") @db.Timestamptz(6)
+  capturedAt       DateTime               @default(now()) @map("captured_at") @db.Timestamptz(6)
+  manualReason     String?                @map("manual_reason")
+  recordedByUserId String?                @map("recorded_by_user_id") @db.Uuid
+  supersededAt     DateTime?              @map("superseded_at") @db.Timestamptz(6)
+  supersededById   String?                @map("superseded_by_id") @db.Uuid
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  firm             Firm                   @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  firmCurrency     FirmCurrency           @relation(fields: [firmId, currency], references: [firmId, code], onDelete: Restrict)
+  recordedBy       User?                  @relation("ExchangeRateRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  supersededBy     ExchangeRate?          @relation("ExchangeRateSupersession", fields: [supersededById], references: [id], onDelete: Restrict)
+  supersedes       ExchangeRate[]         @relation("ExchangeRateSupersession")
+
+  @@index([firmId, currency, effectiveDate])
+  @@index([recordedByUserId])
+  @@map("exchange_rates")
+  @@schema("app")
+}
+
+model FirmCurrency {
+  id               String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId           String             @map("firm_id") @db.Uuid
+  code             String
+  name             String
+  symbol           String?
+  source            FirmCurrencySource
+  sourceName       String?            @map("source_name")
+  sourceUrl        String?            @map("source_url")
+  automaticEnabled Boolean            @default(false) @map("automatic_enabled")
+  active           Boolean            @default(true)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version          Int                @default(1)
+  firm             Firm               @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  exchangeRates    ExchangeRate[]
+
+  @@unique([firmId, code])
+  @@index([firmId, active])
+  @@map("firm_currencies")
+  @@schema("app")
+}
+
+model ExchangeRateSyncRun {
+  id                String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId            String                   @map("firm_id") @db.Uuid
+  trigger           ExchangeRateSyncTrigger
+  status            ExchangeRateSyncStatus
+  scheduleKey       String?                  @map("schedule_key")
+  effectiveDate     DateTime?                @map("effective_date") @db.Date
+  ratesFound        Int                      @default(0) @map("rates_found")
+  errorMessage      String?                  @map("error_message")
+  initiatedByUserId String?                  @map("initiated_by_user_id") @db.Uuid
+  startedAt         DateTime                 @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt       DateTime                 @default(now()) @map("completed_at") @db.Timestamptz(6)
+  firm              Firm                     @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  initiatedBy       User?                    @relation("ExchangeRateSyncInitiator", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([firmId, scheduleKey])
+  @@index([firmId, startedAt])
+  @@index([initiatedByUserId])
+  @@map("exchange_rate_sync_runs")
   @@schema("app")
 }
 

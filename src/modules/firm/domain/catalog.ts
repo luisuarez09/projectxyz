@@ -3,7 +3,13 @@ import type { EvidenceRequirement } from "@/lib/evidence-requirements";
 
 export type OfferingKind = "TAX" | "SERVICE";
 export type TaxpayerCondition = "ORDINARY" | "SPECIAL_TAXPAYER" | "ALL";
-export type OfferingTemplate = "iva" | "dpp" | "inces" | "ivss" | "faov" | "none";
+export type OfferingTemplate =
+  | "iva"
+  | "dpp"
+  | "inces"
+  | "ivss"
+  | "faov"
+  | "none";
 
 export type FirmOffering = {
   id: string;
@@ -23,6 +29,7 @@ export type FirmOffering = {
   appliesFrom: string;
   appliesTo: string;
   active: boolean;
+  archiveOrder: number;
 };
 
 export type TaxRate = {

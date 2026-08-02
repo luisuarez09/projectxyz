@@ -59,6 +59,7 @@ export type CalendarCaseView = {
   business: string;
   owner: string;
   offeringId: string;
+  offeringKey: string;
   offeringName: string;
   offeringKind: "TAX" | "SERVICE";
   organism: string;

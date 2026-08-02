@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileCheck2,
   ListChecks,
+  ListOrdered,
   LoaderCircle,
   Pencil,
   Paperclip,
@@ -17,6 +18,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { ArchiveOrderDialog } from "@/components/archive-order-dialog";
 import { DeadlineRuleFields } from "@/components/deadline-rule-fields";
 import { CalendarReconciliationPanel } from "@/components/calendar-reconciliation-panel";
 import { SpecialTaxpayerCalendar } from "@/components/special-taxpayer-calendar";
@@ -43,7 +45,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  type DeadlineRule,
   emptyDeadlineRule,
   formatDeadlineRule,
   isDeadlineConfigured,
@@ -55,7 +56,10 @@ import {
   type EvidenceRequirement,
   type TaxEvidenceKind,
 } from "@/lib/evidence-requirements";
-import type { FirmOffering, FiscalCalendar } from "@/modules/firm/domain/catalog";
+import type {
+  FirmOffering,
+  FiscalCalendar,
+} from "@/modules/firm/domain/catalog";
 
 type TemplateId = "iva" | "dpp" | "inces" | "ivss" | "faov" | "none";
 type SettingsTab = "rules" | "vat-rates" | "spe-calendar";
@@ -123,12 +127,15 @@ const emptyRule: TaxRule = {
   speFrequency: "Mensual",
   speCalendarGroup: "",
   deadline: { ...emptyDeadlineRule },
-  evidenceRequirements: defaultTaxEvidenceRequirements.map((item) => ({ ...item })),
+  evidenceRequirements: defaultTaxEvidenceRequirements.map((item) => ({
+    ...item,
+  })),
   template: "none",
   source: "",
   appliesFrom: "",
   appliesTo: "",
   active: false,
+  archiveOrder: 1000,
 };
 
 export function TaxRuleSettings() {
@@ -136,11 +143,14 @@ export function TaxRuleSettings() {
   const [rules, setRules] = useState<TaxRule[]>([]);
   const [draft, setDraft] = useState<TaxRule | null>(null);
   const [removing, setRemoving] = useState<TaxRule | null>(null);
+  const [organizing, setOrganizing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canReconcile, setCanReconcile] = useState(false);
-  const [calendarGroups, setCalendarGroups] = useState<CalendarGroupOption[]>([]);
+  const [calendarGroups, setCalendarGroups] = useState<CalendarGroupOption[]>(
+    [],
+  );
 
   const load = useCallback(async () => {
     try {
@@ -150,7 +160,10 @@ export function TaxRuleSettings() {
         throw new Error(body.error ?? "No fue posible cargar los impuestos.");
       setRules(body.offerings.filter((item: TaxRule) => item.kind === "TAX"));
       setCanReconcile(Boolean(body.canReconcile));
-      const groups = new Map<string, { label: string; shortLabels: string[] }>();
+      const groups = new Map<
+        string,
+        { label: string; shortLabels: string[] }
+      >();
       (body.calendars as FiscalCalendar[])
         .filter((calendar) => calendar.taxpayerCondition === "SPECIAL_TAXPAYER")
         .flatMap((calendar) => calendar.matrices)
@@ -301,19 +314,31 @@ export function TaxRuleSettings() {
           </p>
         </div>
         {activeTab === "rules" && (
-          <button
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#14352d] px-3 text-sm font-medium text-white hover:bg-[#0e2821]"
-            onClick={() =>
-              setDraft({
-                ...emptyRule,
-                deadline: { ...emptyDeadlineRule },
-                evidenceRequirements: defaultTaxEvidenceRequirements.map((item) => ({ ...item })),
-              })
-            }
-            type="button"
-          >
-            <Plus size={16} /> Crear obligación
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200"
+              disabled={loading || !rules.length}
+              onClick={() => setOrganizing(true)}
+              type="button"
+            >
+              <ListOrdered size={16} /> Organizar impresión
+            </button>
+            <button
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#14352d] px-3 text-sm font-medium text-white hover:bg-[#0e2821]"
+              onClick={() =>
+                setDraft({
+                  ...emptyRule,
+                  deadline: { ...emptyDeadlineRule },
+                  evidenceRequirements: defaultTaxEvidenceRequirements.map(
+                    (item) => ({ ...item }),
+                  ),
+                })
+              }
+              type="button"
+            >
+              <Plus size={16} /> Crear obligación
+            </button>
+          </div>
         )}
       </header>
 
@@ -353,7 +378,9 @@ export function TaxRuleSettings() {
             <div className="flex gap-3">
               <ShieldAlert className="mt-0.5 shrink-0" size={18} />
               <div>
-                <p className="font-semibold">Una obligación, reglas según el contribuyente</p>
+                <p className="font-semibold">
+                  Una obligación, reglas según el contribuyente
+                </p>
                 <p className="mt-1 leading-5">
                   Define primero a quién aplica. Si eliges ordinarios verás solo
                   su regla; si eliges especiales, solo el calendario SPE; y si
@@ -406,7 +433,10 @@ export function TaxRuleSettings() {
                             setDraft({
                               ...rule,
                               deadline: { ...rule.deadline },
-                              evidenceRequirements: rule.evidenceRequirements.map((item) => ({ ...item })),
+                              evidenceRequirements:
+                                rule.evidenceRequirements.map((item) => ({
+                                  ...item,
+                                })),
                             })
                           }
                           onRemove={() => setRemoving(rule)}
@@ -423,7 +453,13 @@ export function TaxRuleSettings() {
                       key={rule.id}
                       rule={rule}
                       onEdit={() =>
-                        setDraft({ ...rule, deadline: { ...rule.deadline }, evidenceRequirements: rule.evidenceRequirements.map((item) => ({ ...item })) })
+                        setDraft({
+                          ...rule,
+                          deadline: { ...rule.deadline },
+                          evidenceRequirements: rule.evidenceRequirements.map(
+                            (item) => ({ ...item }),
+                          ),
+                        })
                       }
                       onRemove={() => setRemoving(rule)}
                       onToggle={() => void toggle(rule)}
@@ -452,6 +488,14 @@ export function TaxRuleSettings() {
           onClose={() => setDraft(null)}
           onSave={save}
           saving={saving}
+        />
+      )}
+      {organizing && (
+        <ArchiveOrderDialog
+          items={rules}
+          kind="TAX"
+          onClose={() => setOrganizing(false)}
+          onSaved={setRules}
         />
       )}
       {removing && (
@@ -535,14 +579,27 @@ function RuleRow({
         </div>
         <p className="mt-2 flex items-center gap-1 text-xs text-stone-500">
           <Paperclip size={12} /> {rule.evidenceRequirements.length} soportes ·{" "}
-          {rule.evidenceRequirements.filter(({ required }) => required).length} obligatorios
+          {rule.evidenceRequirements.filter(({ required }) => required).length}{" "}
+          obligatorios
         </p>
       </TableCell>
       <TableCell className="break-words px-3 py-4">
-        {usesOrdinaryRule(rule) ? <>
-          <p className="text-xs font-medium uppercase tracking-wide text-stone-400">{rule.frequency}</p>
-          <span className="mt-2 inline-flex items-start gap-1.5 leading-5"><CalendarDays className="mt-0.5 shrink-0 text-stone-400" size={15} />{formatDeadlineRule(rule.deadline)}</span>
-        </> : <span className="text-stone-400">No aplica</span>}
+        {usesOrdinaryRule(rule) ? (
+          <>
+            <p className="text-xs font-medium uppercase tracking-wide text-stone-400">
+              {rule.frequency}
+            </p>
+            <span className="mt-2 inline-flex items-start gap-1.5 leading-5">
+              <CalendarDays
+                className="mt-0.5 shrink-0 text-stone-400"
+                size={15}
+              />
+              {formatDeadlineRule(rule.deadline)}
+            </span>
+          </>
+        ) : (
+          <span className="text-stone-400">No aplica</span>
+        )}
       </TableCell>
       <TableCell className="break-words px-3 py-4">
         {!usesSpecialRule(rule) ? (
@@ -599,29 +656,42 @@ function RuleCard({
         <RuleActions name={rule.name} onEdit={onEdit} onRemove={onRemove} />
       </div>
       <dl className="mt-4 grid gap-4 text-sm">
-        {usesOrdinaryRule(rule) && <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-stone-400">
-            Regla ordinaria · {rule.frequency}
-          </dt>
-          <dd className="mt-1.5 flex items-start gap-1.5 leading-5">
-            <CalendarDays
-              className="mt-0.5 shrink-0 text-stone-400"
-              size={15}
-            />
-            {formatDeadlineRule(rule.deadline)}
-          </dd>
-        </div>}
-        {usesSpecialRule(rule) && <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-stone-400">
-            Tratamiento SPE
-          </dt>
-          <dd className="mt-1.5">
-            <p className="font-medium text-violet-700 dark:text-violet-300">{rule.speFrequency} · por terminal RIF</p>
-            <p className="mt-1 text-xs leading-5 text-stone-500">{calendar?.label ?? "Matriz por asignar"}</p>
-          </dd>
-        </div>}
+        {usesOrdinaryRule(rule) && (
+          <div>
+            <dt className="text-xs font-medium uppercase tracking-wide text-stone-400">
+              Regla ordinaria · {rule.frequency}
+            </dt>
+            <dd className="mt-1.5 flex items-start gap-1.5 leading-5">
+              <CalendarDays
+                className="mt-0.5 shrink-0 text-stone-400"
+                size={15}
+              />
+              {formatDeadlineRule(rule.deadline)}
+            </dd>
+          </div>
+        )}
+        {usesSpecialRule(rule) && (
+          <div>
+            <dt className="text-xs font-medium uppercase tracking-wide text-stone-400">
+              Tratamiento SPE
+            </dt>
+            <dd className="mt-1.5">
+              <p className="font-medium text-violet-700 dark:text-violet-300">
+                {rule.speFrequency} · por terminal RIF
+              </p>
+              <p className="mt-1 text-xs leading-5 text-stone-500">
+                {calendar?.label ?? "Matriz por asignar"}
+              </p>
+            </dd>
+          </div>
+        )}
       </dl>
-      <p className="mt-4 flex items-center gap-1.5 text-xs text-stone-500"><Paperclip size={13} />{rule.evidenceRequirements.length} soportes habilitados · {rule.evidenceRequirements.filter(({ required }) => required).length} obligatorios</p>
+      <p className="mt-4 flex items-center gap-1.5 text-xs text-stone-500">
+        <Paperclip size={13} />
+        {rule.evidenceRequirements.length} soportes habilitados ·{" "}
+        {rule.evidenceRequirements.filter(({ required }) => required).length}{" "}
+        obligatorios
+      </p>
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-stone-100 pt-4 dark:border-stone-800">
         <div className="text-xs">
           {template?.href ? (
@@ -746,69 +816,267 @@ function RuleDialog({
           <div className="space-y-5 p-5">
             <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-700">
               <div className="mb-4 flex items-start gap-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">1</span>
-                <div><h3 className="text-sm font-semibold">Identificación y alcance</h3><p className="mt-1 text-xs leading-5 text-stone-500">La condición elegida controla exactamente qué reglas podrás configurar.</p></div>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">
+                  1
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold">
+                    Identificación y alcance
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-stone-500">
+                    La condición elegida controla exactamente qué reglas podrás
+                    configurar.
+                  </p>
+                </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="field-label">Impuesto u obligación<Input className="field mt-1.5" onChange={(event) => onChange({ ...draft, name: event.target.value })} placeholder="Ej. Pensiones" value={draft.name} /></label>
-                <label className="field-label">Organismo<Input className="field mt-1.5" onChange={(event) => onChange({ ...draft, organism: event.target.value })} placeholder="Ente responsable" value={draft.organism} /></label>
-                <label className="field-label sm:col-span-2">Aplica a<SimpleSelect className="field mt-1.5" onChange={(event) => {
-                  const taxpayerCondition = event.target.value as TaxRule["taxpayerCondition"];
-                  onChange({
-                    ...draft,
-                    taxpayerCondition,
-                    ...(taxpayerCondition === "ORDINARY"
-                      ? { speFrequency: "No aplica", speCalendarGroup: "" }
-                      : draft.speFrequency === "No aplica"
-                        ? { speFrequency: "Mensual" }
-                        : {}),
-                  });
-                }} value={draft.taxpayerCondition}>
-                  <option value="ORDINARY">Solo contribuyentes ordinarios</option>
-                  <option value="SPECIAL_TAXPAYER">Solo contribuyentes especiales</option>
-                  <option value="ALL">Ambos: ordinarios y especiales</option>
-                </SimpleSelect><span className="mt-1.5 block text-xs font-normal leading-5 text-stone-500">El calendario aplicará la obligación únicamente a las empresas que coincidan con esta condición.</span></label>
+                <label className="field-label">
+                  Impuesto u obligación
+                  <Input
+                    className="field mt-1.5"
+                    onChange={(event) =>
+                      onChange({ ...draft, name: event.target.value })
+                    }
+                    placeholder="Ej. Pensiones"
+                    value={draft.name}
+                  />
+                </label>
+                <label className="field-label">
+                  Organismo
+                  <Input
+                    className="field mt-1.5"
+                    onChange={(event) =>
+                      onChange({ ...draft, organism: event.target.value })
+                    }
+                    placeholder="Ente responsable"
+                    value={draft.organism}
+                  />
+                </label>
+                <label className="field-label sm:col-span-2">
+                  Aplica a
+                  <SimpleSelect
+                    className="field mt-1.5"
+                    onChange={(event) => {
+                      const taxpayerCondition = event.target
+                        .value as TaxRule["taxpayerCondition"];
+                      onChange({
+                        ...draft,
+                        taxpayerCondition,
+                        ...(taxpayerCondition === "ORDINARY"
+                          ? { speFrequency: "No aplica", speCalendarGroup: "" }
+                          : draft.speFrequency === "No aplica"
+                            ? { speFrequency: "Mensual" }
+                            : {}),
+                      });
+                    }}
+                    value={draft.taxpayerCondition}
+                  >
+                    <option value="ORDINARY">
+                      Solo contribuyentes ordinarios
+                    </option>
+                    <option value="SPECIAL_TAXPAYER">
+                      Solo contribuyentes especiales
+                    </option>
+                    <option value="ALL">Ambos: ordinarios y especiales</option>
+                  </SimpleSelect>
+                  <span className="mt-1.5 block text-xs font-normal leading-5 text-stone-500">
+                    El calendario aplicará la obligación únicamente a las
+                    empresas que coincidan con esta condición.
+                  </span>
+                </label>
               </div>
             </section>
 
             <section>
               <div className="mb-4 flex items-start gap-3 px-1">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">2</span>
-                <div><h3 className="text-sm font-semibold">Reglas de vencimiento</h3><p className="mt-1 text-xs leading-5 text-stone-500">Solo se muestran los tratamientos que corresponden al alcance seleccionado.</p></div>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">
+                  2
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold">
+                    Reglas de vencimiento
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-stone-500">
+                    Solo se muestran los tratamientos que corresponden al
+                    alcance seleccionado.
+                  </p>
+                </div>
               </div>
-              <div className={`grid gap-4 ${usesOrdinaryRule(draft) && usesSpecialRule(draft) ? "lg:grid-cols-2" : ""}`}>
-                {usesOrdinaryRule(draft) && <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-700 dark:bg-stone-900">
-                  <p className="text-sm font-semibold">Contribuyente ordinario</p><p className="mt-1 text-xs leading-5 text-stone-500">Periodicidad y plazo calculado desde la base seleccionada.</p>
-                  <label className="field-label mt-4 block">Periodicidad<SimpleSelect className="field mt-1.5" onChange={(event) => onChange({ ...draft, frequency: event.target.value })} value={draft.frequency}>{frequencyOptions.map((frequency) => <option key={frequency} value={frequency}>{frequency}</option>)}</SimpleSelect></label>
-                  <div className="mt-4"><DeadlineRuleFields onChange={(deadline) => onChange({ ...draft, deadline })} value={draft.deadline} /></div>
-                </div>}
-                {usesSpecialRule(draft) && <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4 dark:border-violet-900 dark:bg-violet-950/20">
-                  <p className="text-sm font-semibold text-violet-950 dark:text-violet-100">Contribuyente especial</p><p className="mt-1 text-xs leading-5 text-stone-500">La fecha se obtiene de la matriz SPE configurada y del terminal del RIF.</p>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                    <label className="field-label">Periodicidad SPE<SimpleSelect className="field mt-1.5" onChange={(event) => onChange({ ...draft, speFrequency: event.target.value })} value={draft.speFrequency}><option>Quincenal</option><option>Mensual</option><option>Anual</option><option>Según cierre</option></SimpleSelect></label>
-                    <label className="field-label">Matriz de fechas<SimpleSelect className="field mt-1.5" onChange={(event) => onChange({ ...draft, speCalendarGroup: event.target.value })} value={draft.speCalendarGroup}><option value="">Selecciona la matriz</option>{calendarGroups.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}</SimpleSelect>{calendarGroups.length === 0 && <span className="mt-1.5 block text-xs font-normal leading-5 text-amber-700">Primero crea una matriz en Calendario SPE.</span>}</label>
+              <div
+                className={`grid gap-4 ${usesOrdinaryRule(draft) && usesSpecialRule(draft) ? "lg:grid-cols-2" : ""}`}
+              >
+                {usesOrdinaryRule(draft) && (
+                  <div className="rounded-xl border border-stone-200 bg-white p-4 dark:border-stone-700 dark:bg-stone-900">
+                    <p className="text-sm font-semibold">
+                      Contribuyente ordinario
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-stone-500">
+                      Periodicidad y plazo calculado desde la base seleccionada.
+                    </p>
+                    <label className="field-label mt-4 block">
+                      Periodicidad
+                      <SimpleSelect
+                        className="field mt-1.5"
+                        onChange={(event) =>
+                          onChange({ ...draft, frequency: event.target.value })
+                        }
+                        value={draft.frequency}
+                      >
+                        {frequencyOptions.map((frequency) => (
+                          <option key={frequency} value={frequency}>
+                            {frequency}
+                          </option>
+                        ))}
+                      </SimpleSelect>
+                    </label>
+                    <div className="mt-4">
+                      <DeadlineRuleFields
+                        onChange={(deadline) =>
+                          onChange({ ...draft, deadline })
+                        }
+                        value={draft.deadline}
+                      />
+                    </div>
                   </div>
-                </div>}
+                )}
+                {usesSpecialRule(draft) && (
+                  <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4 dark:border-violet-900 dark:bg-violet-950/20">
+                    <p className="text-sm font-semibold text-violet-950 dark:text-violet-100">
+                      Contribuyente especial
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-stone-500">
+                      La fecha se obtiene de la matriz SPE configurada y del
+                      terminal del RIF.
+                    </p>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                      <label className="field-label">
+                        Periodicidad SPE
+                        <SimpleSelect
+                          className="field mt-1.5"
+                          onChange={(event) =>
+                            onChange({
+                              ...draft,
+                              speFrequency: event.target.value,
+                            })
+                          }
+                          value={draft.speFrequency}
+                        >
+                          <option>Quincenal</option>
+                          <option>Mensual</option>
+                          <option>Anual</option>
+                          <option>Según cierre</option>
+                        </SimpleSelect>
+                      </label>
+                      <label className="field-label">
+                        Matriz de fechas
+                        <SimpleSelect
+                          className="field mt-1.5"
+                          onChange={(event) =>
+                            onChange({
+                              ...draft,
+                              speCalendarGroup: event.target.value,
+                            })
+                          }
+                          value={draft.speCalendarGroup}
+                        >
+                          <option value="">Selecciona la matriz</option>
+                          {calendarGroups.map((group) => (
+                            <option key={group.id} value={group.id}>
+                              {group.label}
+                            </option>
+                          ))}
+                        </SimpleSelect>
+                        {calendarGroups.length === 0 && (
+                          <span className="mt-1.5 block text-xs font-normal leading-5 text-amber-700">
+                            Primero crea una matriz en Calendario SPE.
+                          </span>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
 
             <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-700">
               <div className="mb-4 flex items-start gap-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">3</span>
-                <div><h3 className="text-sm font-semibold">Soportes del expediente</h3><p className="mt-1 text-xs leading-5 text-stone-500">Habilita solo los archivos que este impuesto debe mostrar en el calendario y marca cuáles son obligatorios.</p></div>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">
+                  3
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold">
+                    Soportes del expediente
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-stone-500">
+                    Habilita solo los archivos que este impuesto debe mostrar en
+                    el calendario y marca cuáles son obligatorios.
+                  </p>
+                </div>
               </div>
-              <EvidenceRequirementsEditor onChange={(evidenceRequirements) => onChange({ ...draft, evidenceRequirements })} value={draft.evidenceRequirements} />
+              <EvidenceRequirementsEditor
+                onChange={(evidenceRequirements) =>
+                  onChange({ ...draft, evidenceRequirements })
+                }
+                value={draft.evidenceRequirements}
+              />
             </section>
 
             <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-700">
               <div className="mb-4 flex items-start gap-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">4</span>
-                <div><h3 className="text-sm font-semibold">Plantilla y trazabilidad</h3><p className="mt-1 text-xs leading-5 text-stone-500">La fuente y la vigencia son obligatorias antes de habilitar la regla.</p></div>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#14352d] text-xs font-semibold text-white">
+                  4
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold">
+                    Plantilla y trazabilidad
+                  </h3>
+                  <p className="mt-1 text-xs leading-5 text-stone-500">
+                    La fuente y la vigencia son obligatorias antes de habilitar
+                    la regla.
+                  </p>
+                </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="field-label sm:col-span-2">Plantilla aplicable<SimpleSelect className="field mt-1.5" onChange={(event) => onChange({ ...draft, template: event.target.value as TemplateId })} value={draft.template}>{templates.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}</SimpleSelect></label>
-                <label className="field-label">Aplicar a períodos desde<DatePicker className="field mt-1.5" onChange={(event) => onChange({ ...draft, appliesFrom: event.target.value })} value={draft.appliesFrom} /></label>
-                <label className="field-label">Documento que respalda la regla<Input className="field mt-1.5" onChange={(event) => onChange({ ...draft, source: event.target.value })} placeholder="Providencia, gaceta o criterio validado" value={draft.source} /></label>
+                <label className="field-label sm:col-span-2">
+                  Plantilla aplicable
+                  <SimpleSelect
+                    className="field mt-1.5"
+                    onChange={(event) =>
+                      onChange({
+                        ...draft,
+                        template: event.target.value as TemplateId,
+                      })
+                    }
+                    value={draft.template}
+                  >
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.label}
+                      </option>
+                    ))}
+                  </SimpleSelect>
+                </label>
+                <label className="field-label">
+                  Aplicar a períodos desde
+                  <DatePicker
+                    className="field mt-1.5"
+                    onChange={(event) =>
+                      onChange({ ...draft, appliesFrom: event.target.value })
+                    }
+                    value={draft.appliesFrom}
+                  />
+                </label>
+                <label className="field-label">
+                  Documento que respalda la regla
+                  <Input
+                    className="field mt-1.5"
+                    onChange={(event) =>
+                      onChange({ ...draft, source: event.target.value })
+                    }
+                    placeholder="Providencia, gaceta o criterio validado"
+                    value={draft.source}
+                  />
+                </label>
               </div>
             </section>
 
@@ -837,9 +1105,10 @@ function RuleDialog({
                 <FileCheck2 size={14} /> Control de activación
               </span>
               <p className="mt-1">
-                La obligación queda como borrador mientras falten su trazabilidad
-                o los datos necesarios para activarla. Los soportes obligatorios
-                se validarán al completar el expediente en el calendario.
+                La obligación queda como borrador mientras falten su
+                trazabilidad o los datos necesarios para activarla. Los soportes
+                obligatorios se validarán al completar el expediente en el
+                calendario.
               </p>
             </div>
           </div>
@@ -890,19 +1159,52 @@ function EvidenceRequirementsEditor({
     );
   };
   const toggleRequired = (kind: TaxEvidenceKind, required: boolean) => {
-    onChange(value.map((item) => (item.kind === kind ? { ...item, required } : item)));
+    onChange(
+      value.map((item) => (item.kind === kind ? { ...item, required } : item)),
+    );
   };
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {taxEvidenceOptions.map((option) => {
         const requirement = value.find(({ kind }) => kind === option.kind);
         return (
-          <div className={`rounded-xl border p-3 transition ${requirement ? "border-[#86a995] bg-[#f1f7f2] dark:border-emerald-800 dark:bg-emerald-950/30" : "border-stone-200 dark:border-stone-700"}`} key={option.kind}>
+          <div
+            className={`rounded-xl border p-3 transition ${requirement ? "border-[#86a995] bg-[#f1f7f2] dark:border-emerald-800 dark:bg-emerald-950/30" : "border-stone-200 dark:border-stone-700"}`}
+            key={option.kind}
+          >
             <label className="flex cursor-pointer items-start gap-2.5">
-              <input className="mt-0.5 size-4 accent-[#14352d]" checked={Boolean(requirement)} onChange={(event) => toggleEnabled(option.kind, event.target.checked)} type="checkbox" />
-              <span><span className="block text-sm font-medium">{evidenceLabel(option.kind)}</span><span className="mt-1 block text-[11px] leading-4 text-stone-500">{requirement ? "Visible en el calendario" : "No se solicitará"}</span></span>
+              <input
+                className="mt-0.5 size-4 accent-[#14352d]"
+                checked={Boolean(requirement)}
+                onChange={(event) =>
+                  toggleEnabled(option.kind, event.target.checked)
+                }
+                type="checkbox"
+              />
+              <span>
+                <span className="block text-sm font-medium">
+                  {evidenceLabel(option.kind)}
+                </span>
+                <span className="mt-1 block text-[11px] leading-4 text-stone-500">
+                  {requirement
+                    ? "Visible en el calendario"
+                    : "No se solicitará"}
+                </span>
+              </span>
             </label>
-            {requirement && <label className="mt-3 flex cursor-pointer items-center justify-between gap-2 border-t border-stone-200 pt-2.5 text-xs font-medium text-stone-600 dark:border-stone-700 dark:text-stone-300"><span>Obligatorio</span><Switch aria-label={`${evidenceLabel(option.kind)} obligatorio`} checked={requirement.required} onCheckedChange={(checked) => toggleRequired(option.kind, checked)} size="sm" /></label>}
+            {requirement && (
+              <label className="mt-3 flex cursor-pointer items-center justify-between gap-2 border-t border-stone-200 pt-2.5 text-xs font-medium text-stone-600 dark:border-stone-700 dark:text-stone-300">
+                <span>Obligatorio</span>
+                <Switch
+                  aria-label={`${evidenceLabel(option.kind)} obligatorio`}
+                  checked={requirement.required}
+                  onCheckedChange={(checked) =>
+                    toggleRequired(option.kind, checked)
+                  }
+                  size="sm"
+                />
+              </label>
+            )}
           </div>
         );
       })}

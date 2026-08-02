@@ -114,6 +114,11 @@ describe("firm settings and team backend", () => {
       phone: "0414-0000000",
       pdfHeader: "Encabezado persistido",
       pdfFooter: "Pie persistido",
+      archivePaperSize: current.archivePaperSize,
+      exchangeRateSyncStart: current.exchangeRateSyncStart,
+      exchangeRateSyncEnd: current.exchangeRateSyncEnd,
+      exchangeRateSyncInterval: current.exchangeRateSyncInterval,
+      currencies: current.currencies,
     };
     const saved = await saveFirmGeneralSettings(auth, input);
 

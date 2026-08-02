@@ -1,4 +1,5 @@
 import type { DeadlineRule } from "@/lib/deadline-rules";
+import type { EvidenceRequirement } from "@/lib/evidence-requirements";
 
 export type OfferingKind = "TAX" | "SERVICE";
 export type TaxpayerCondition = "ORDINARY" | "SPECIAL_TAXPAYER" | "ALL";
@@ -16,6 +17,7 @@ export type FirmOffering = {
   speFrequency: string;
   speCalendarGroup: string;
   deadline: DeadlineRule;
+  evidenceRequirements: EvidenceRequirement[];
   template: OfferingTemplate;
   source: string;
   appliesFrom: string;
@@ -78,4 +80,5 @@ export type FirmCatalog = {
   taxRates: TaxRate[];
   calendars: FiscalCalendar[];
   canManage: boolean;
+  canReconcile: boolean;
 };

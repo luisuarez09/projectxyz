@@ -1,3 +1,10 @@
 import { FiscalMatrix } from "@/components/fiscal-matrix";
 
-export default function MatrixPage() { return <FiscalMatrix />; }
+export default async function MatrixPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const { period } = await searchParams;
+  return <FiscalMatrix initialPeriod={period} />;
+}

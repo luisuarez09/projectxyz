@@ -91,22 +91,54 @@ enum FiscalCalendarTaxpayerCondition {
   @@schema("app")
 }
 
+enum ComplianceCaseStatus {
+  PENDING
+  PREPARING
+  READY_FOR_REVIEW
+  SUBMITTED
+  PAID
+  CLOSED
+  INCIDENT
+  NOT_APPLICABLE
+
+  @@schema("app")
+}
+
+enum ComplianceActivityMode {
+  WITH_ACTIVITY
+  WITHOUT_ACTIVITY
+
+  @@schema("app")
+}
+
+enum ComplianceEvidenceKind {
+  SOLVENCY
+  DECLARATION_RECEIPT
+  DECLARATION_FILE
+  PAYMENT_FORM
+  PAYMENT_RECEIPT
+  INVOICE
+  OTHER
+
+  @@schema("app")
+}
+
 /// Tenant anchor retained even while the product launches with one firm.
 model Firm {
-  id                 String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  entityType         FirmEntityType    @default(LEGAL_ENTITY) @map("entity_type")
-  legalName          String            @map("legal_name")
-  tradeName          String?           @map("trade_name")
-  rif                String?           @unique
+  id                 String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  entityType         FirmEntityType           @default(LEGAL_ENTITY) @map("entity_type")
+  legalName          String                   @map("legal_name")
+  tradeName          String?                  @map("trade_name")
+  rif                String?                  @unique
   email              String?
   phone              String?
-  fiscalAddress      String?           @map("fiscal_address")
-  pdfHeader          String?           @map("pdf_header")
-  pdfFooter          String?           @map("pdf_footer")
-  logoStoredObjectId String?           @unique @map("logo_stored_object_id") @db.Uuid
-  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version            Int               @default(1)
+  fiscalAddress      String?                  @map("fiscal_address")
+  pdfHeader          String?                  @map("pdf_header")
+  pdfFooter          String?                  @map("pdf_footer")
+  logoStoredObjectId String?                  @unique @map("logo_stored_object_id") @db.Uuid
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version            Int                      @default(1)
   profiles           UserProfile[]
   clients            FirmClient[]
   companies          Company[]
@@ -119,7 +151,9 @@ model Firm {
   offerings          FirmOffering[]
   taxRates           TaxRate[]
   fiscalCalendars    FiscalCalendar[]
-  logoStoredObject   StoredObject?     @relation("FirmLogo", fields: [logoStoredObjectId], references: [id], onDelete: Restrict)
+  complianceCases    ComplianceCase[]
+  complianceEvidence ComplianceCaseEvidence[]
+  logoStoredObject   StoredObject?            @relation("FirmLogo", fields: [logoStoredObjectId], references: [id], onDelete: Restrict)
 
   @@map("firms")
   @@schema("app")
@@ -169,6 +203,7 @@ model FirmOffering {
   deadlineDayCount    Int                             @default(0) @map("deadline_day_count")
   deadlineDayType     String                          @map("deadline_day_type")
   deadlineBase        String                          @map("deadline_base")
+  evidenceRequirements Json                           @default("[]") @map("evidence_requirements") @db.JsonB
   templateKey         String?                         @map("template_key")
   source              String?
   effectiveFrom       DateTime?                       @map("effective_from") @db.Date
@@ -180,6 +215,7 @@ model FirmOffering {
   firm                Firm                            @relation(fields: [firmId], references: [id], onDelete: Restrict)
   taxRates            TaxRate[]
   calendarMatrixLinks FiscalCalendarMatrixOffering[]
+  complianceCases     ComplianceCase[]
 
   @@unique([firmId, key])
   @@index([firmId, kind, active])
@@ -288,23 +324,24 @@ model FiscalCalendarDate {
 
 /// Application-owned data associated with a Better Auth identity.
 model UserProfile {
-  id                   String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId               String          @unique @map("user_id") @db.Uuid
-  firmId               String          @map("firm_id") @db.Uuid
-  displayName          String          @map("display_name")
-  profileType          UserProfileType @default(STAFF) @map("profile_type")
-  position             String?
-  profession           String?
-  active               Boolean         @default(true)
-  retiredAt            DateTime?       @map("retired_at") @db.Timestamptz(6)
-  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version              Int             @default(1)
-  activeCompanyId      String?         @map("active_company_id") @db.Uuid
-  user                 User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  firm                 Firm            @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  activeCompany        Company?        @relation("ActiveCompany", fields: [activeCompanyId], references: [id], onDelete: SetNull)
-  responsibleCompanies Company[]       @relation("CompanyResponsible")
+  id                      String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId                  String           @unique @map("user_id") @db.Uuid
+  firmId                  String           @map("firm_id") @db.Uuid
+  displayName             String           @map("display_name")
+  profileType             UserProfileType  @default(STAFF) @map("profile_type")
+  position                String?
+  profession              String?
+  active                  Boolean          @default(true)
+  retiredAt               DateTime?        @map("retired_at") @db.Timestamptz(6)
+  createdAt               DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                 Int              @default(1)
+  activeCompanyId         String?          @map("active_company_id") @db.Uuid
+  user                    User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  firm                    Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  activeCompany           Company?         @relation("ActiveCompany", fields: [activeCompanyId], references: [id], onDelete: SetNull)
+  responsibleCompanies    Company[]        @relation("CompanyResponsible")
+  assignedComplianceCases ComplianceCase[] @relation("ComplianceCaseAssignee")
 
   @@index([firmId])
   @@index([activeCompanyId])
@@ -380,6 +417,8 @@ model Company {
   officers                    CompanyOfficer[]
   offerings                   CompanyOffering[]
   municipalActivities         CompanyMunicipalActivity[]
+  complianceCases             ComplianceCase[]
+  complianceEvidence          ComplianceCaseEvidence[]
 
   @@unique([firmId, normalizedRif])
   @@index([firmId, status])
@@ -414,6 +453,75 @@ model CompanyOffering {
   @@id([companyId, kind, offeringKey])
   @@index([companyId, kind])
   @@map("company_offerings")
+  @@schema("app")
+}
+
+model ComplianceCase {
+  id                String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId            String                   @map("firm_id") @db.Uuid
+  companyId         String                   @map("company_id") @db.Uuid
+  offeringId        String                   @map("offering_id") @db.Uuid
+  assignedProfileId String?                  @map("assigned_profile_id") @db.Uuid
+  periodKey         String                   @map("period_key")
+  periodLabel       String                   @map("period_label")
+  periodMonth       DateTime                 @map("period_month") @db.Date
+  periodStart       DateTime                 @map("period_start") @db.Date
+  periodEnd         DateTime                 @map("period_end") @db.Date
+  dueDate           DateTime?                @map("due_date") @db.Date
+  status            ComplianceCaseStatus     @default(PENDING)
+  activityMode      ComplianceActivityMode?  @map("activity_mode")
+  filedAt           DateTime?                @map("filed_at") @db.Date
+  paidAt            DateTime?                @map("paid_at") @db.Date
+  amount            Decimal?                 @db.Decimal(20, 6)
+  offeringName      String                   @map("offering_name")
+  offeringKind      CompanyOfferingKind      @map("offering_kind")
+  organism          String
+  cadence           String
+  regime            String
+  deadlineBasis     String                   @map("deadline_basis")
+  ruleVersion       Int                      @map("rule_version")
+  sourceSnapshot    String?                  @map("source_snapshot")
+  evidenceRequirements Json                  @default("[]") @map("evidence_requirements") @db.JsonB
+  suppressedAt      DateTime?                @map("suppressed_at") @db.Timestamptz(6)
+  suppressionReason String?                  @map("suppression_reason")
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version           Int                      @default(1)
+  firm              Firm                     @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company           Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  offering          FirmOffering             @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  assignedProfile   UserProfile?             @relation("ComplianceCaseAssignee", fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  evidences         ComplianceCaseEvidence[]
+
+  @@unique([companyId, offeringId, periodKey])
+  @@index([firmId, periodMonth, status])
+  @@index([firmId, periodMonth, suppressedAt])
+  @@index([companyId, periodMonth, dueDate])
+  @@index([assignedProfileId, status])
+  @@map("compliance_cases")
+  @@schema("app")
+}
+
+model ComplianceCaseEvidence {
+  id               String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId           String                 @map("firm_id") @db.Uuid
+  companyId        String                 @map("company_id") @db.Uuid
+  caseId           String                 @map("case_id") @db.Uuid
+  storedObjectId   String                 @unique @map("stored_object_id") @db.Uuid
+  uploadedByUserId String                 @map("uploaded_by_user_id") @db.Uuid
+  kind             ComplianceEvidenceKind
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  case             ComplianceCase         @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  firm             Firm                   @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company          Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  storedObject     StoredObject           @relation(fields: [storedObjectId], references: [id], onDelete: Restrict)
+  uploadedBy       User                   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([caseId, kind])
+  @@index([firmId, companyId, createdAt])
+  @@index([uploadedByUserId])
+  @@map("compliance_case_evidences")
   @@schema("app")
 }
 
@@ -586,28 +694,29 @@ model InvitationCompanyAccess {
 }
 
 model StoredObject {
-  id               String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId           String             @map("firm_id") @db.Uuid
-  companyId        String?            @map("company_id") @db.Uuid
-  uploadedByUserId String             @map("uploaded_by_user_id") @db.Uuid
-  bucket           String
-  objectKey        String             @map("object_key")
-  originalName     String             @map("original_name")
-  declaredMime     String             @map("declared_mime")
-  detectedMime     String?            @map("detected_mime")
-  sizeBytes        BigInt             @map("size_bytes")
-  checksumSha256   String             @map("checksum_sha256")
-  status           StoredObjectStatus @default(PENDING)
-  rejectionReason  String?            @map("rejection_reason")
-  scannedAt        DateTime?          @map("scanned_at") @db.Timestamptz(6)
-  availableAt      DateTime?          @map("available_at") @db.Timestamptz(6)
-  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  firm             Firm               @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  company          Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  uploadedBy       User               @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
-  documentVersions DocumentVersion[]
-  firmLogo         Firm?              @relation("FirmLogo")
+  id                 String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId             String                  @map("firm_id") @db.Uuid
+  companyId          String?                 @map("company_id") @db.Uuid
+  uploadedByUserId   String                  @map("uploaded_by_user_id") @db.Uuid
+  bucket             String
+  objectKey          String                  @map("object_key")
+  originalName       String                  @map("original_name")
+  declaredMime       String                  @map("declared_mime")
+  detectedMime       String?                 @map("detected_mime")
+  sizeBytes          BigInt                  @map("size_bytes")
+  checksumSha256     String                  @map("checksum_sha256")
+  status             StoredObjectStatus      @default(PENDING)
+  rejectionReason    String?                 @map("rejection_reason")
+  scannedAt          DateTime?               @map("scanned_at") @db.Timestamptz(6)
+  availableAt        DateTime?               @map("available_at") @db.Timestamptz(6)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  firm               Firm                    @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company            Company?                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  uploadedBy         User                    @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  documentVersions   DocumentVersion[]
+  firmLogo           Firm?                   @relation("FirmLogo")
+  complianceEvidence ComplianceCaseEvidence?
 
   @@unique([bucket, objectKey])
   @@index([firmId, companyId, status])

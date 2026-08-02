@@ -1,24 +1,67 @@
-"use client";;
+"use client";
+
 import { CheckCircle2, CircleAlert, Clock3, MinusCircle, XCircle } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
+import { useCompanyContext } from "@/components/company-context";
 import { SimpleSelect } from "@/components/ui/simple-select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import type { AnnualStatus, AnnualStatusOverview } from "@/modules/calendar/domain/calendar";
 
 const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-type Status = "pagado" | "registrado" | "pendiente" | "futuro" | "no-aplica";
-type Service = { name: string; provider: string; deadline: string; statuses: Status[] };
-const services: Service[] = [
-  { name: "Electricidad", provider: "Prestador eléctrico", deadline: "Fecha indicada en factura", statuses: ["pagado", "pagado", "pagado", "pagado", "pagado", "pendiente", "futuro", "futuro", "futuro", "futuro", "futuro", "futuro"] },
-  { name: "Agua", provider: "Prestador de agua", deadline: "Fecha indicada en factura", statuses: ["pagado", "pagado", "pagado", "pagado", "pagado", "registrado", "futuro", "futuro", "futuro", "futuro", "futuro", "futuro"] },
-  { name: "Aseo urbano", provider: "Alcaldía · Municipio principal", deadline: "10 días hábiles · período siguiente", statuses: ["pagado", "pagado", "pagado", "pagado", "pagado", "pendiente", "futuro", "futuro", "futuro", "futuro", "futuro", "futuro"] },
-  { name: "Gas", provider: "Prestador de gas", deadline: "Fecha indicada en factura", statuses: ["pagado", "pagado", "pagado", "pagado", "pagado", "pendiente", "futuro", "futuro", "futuro", "futuro", "futuro", "futuro"] },
-  { name: "Publicidad", provider: "Alcaldía aplicable", deadline: "10 días hábiles · período siguiente", statuses: ["no-aplica", "no-aplica", "pagado", "no-aplica", "no-aplica", "pendiente", "futuro", "futuro", "futuro", "futuro", "futuro", "futuro"] },
-  { name: "Solvencia municipal", provider: "Alcaldía · Municipio principal", deadline: "Según fecha del documento", statuses: ["registrado", "registrado", "registrado", "registrado", "registrado", "registrado", "registrado", "registrado", "registrado", "registrado", "registrado", "registrado"] },
-];
-const info: Record<Status, { label: string; className: string; Icon: typeof CheckCircle2 }> = { pagado: { label: "Pagado", className: "text-emerald-500", Icon: CheckCircle2 }, registrado: { label: "Registrado", className: "text-amber-500", Icon: Clock3 }, pendiente: { label: "Pendiente", className: "text-rose-500", Icon: XCircle }, futuro: { label: "Pendiente de período", className: "text-slate-400", Icon: MinusCircle }, "no-aplica": { label: "No corresponde", className: "text-stone-300 dark:text-stone-600", Icon: MinusCircle } };
+const currentYear = new Date().getFullYear();
+const info: Record<AnnualStatus, { label: string; className: string; Icon: typeof CheckCircle2 }> = {
+  COMPLETED: { label: "Pagado", className: "text-emerald-500", Icon: CheckCircle2 },
+  REGISTERED: { label: "Registrado", className: "text-amber-500", Icon: Clock3 },
+  PENDING: { label: "Pendiente", className: "text-rose-500", Icon: XCircle },
+  FUTURE: { label: "Pendiente de per\u00edodo", className: "text-slate-400", Icon: MinusCircle },
+  NOT_APPLICABLE: { label: "No corresponde", className: "text-stone-300 dark:text-stone-600", Icon: MinusCircle },
+};
 
-export function ServiceStatusOverview() { return <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-10"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><div className="flex items-center gap-2 text-sm text-stone-500"><Link className="hover:text-[#14352d] dark:hover:text-emerald-300" href="/servicios">Servicios</Link><span>/</span><span>Estatus</span></div><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Estatus de servicios</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600 dark:text-stone-300">Panorama anual de los compromisos de servicios y solvencias de Nueva Confitería del Sur, C.A.</p></div><label className="text-sm font-medium">Año<SimpleSelect className="field mt-1.5 w-32" defaultValue="2026"><option>2026</option></SimpleSelect></label></div><div className="mt-7 grid gap-4 sm:grid-cols-3"><Summary label="Pagados" value="20" detail="Con soporte de pago" tone="emerald" /><Summary label="Por completar" value="4" detail="Facturas o pagos de junio" tone="rose" /><Summary label="Registrados" value="13" detail="Documentos y solvencias vigentes" tone="amber" /></div><section className="mt-6 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">Control anual de servicios</h2><p className="mt-1 text-sm text-stone-500">Cada marca representa el estado del documento o pago de ese período.</p></div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">{(["pendiente", "registrado", "pagado", "futuro"] as Status[]).map((status) => <Legend key={status} status={status} />)}</div></div><div className="overflow-x-auto"><Table className="min-w-[980px] w-full text-left text-sm"><TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="min-w-72 px-5 py-3">Servicio</TableHead>{months.map((month) => <TableHead className="w-14 px-2 py-3 text-center" key={month}>{month}</TableHead>)}</TableRow></TableHeader><TableBody className="divide-y divide-stone-100 dark:divide-stone-800">{services.map((service) => <TableRow className="hover:bg-stone-50 dark:hover:bg-stone-800/50" key={service.name}><TableCell className="px-5 py-4"><Link className="font-medium hover:text-[#14352d] dark:hover:text-emerald-300" href="/servicios">{service.name}</Link><p className="mt-0.5 text-xs text-stone-500">{service.provider}</p><p className="mt-1 text-xs text-stone-400">{service.deadline}</p></TableCell>{service.statuses.map((status, index) => <TableCell className="px-2 py-4 text-center" key={`${service.name}-${months[index]}`}><Mark status={status} /></TableCell>)}</TableRow>)}</TableBody></Table></div><div className="border-t border-stone-100 bg-stone-50/60 px-5 py-3 text-xs leading-5 text-stone-500 dark:border-stone-800 dark:bg-stone-800/40">Vista de control demostrativa: los estados se alimentarán de los documentos, facturas y fechas calculadas para la empresa.</div></section></div>; }
-function Mark({ status }: { status: Status }) { const { label, className, Icon } = info[status]; return <span className={`inline-flex ${className}`} title={label}><Icon aria-label={label} size={18} /></span>; }
-function Legend({ status }: { status: Status }) { const { label, className, Icon } = info[status]; return <span className={`inline-flex items-center gap-1 ${className}`}><Icon size={15} /> {label}</span>; }
+export function ServiceStatusOverview() {
+  const { activeCompanyId, loading: companyLoading } = useCompanyContext();
+  const [year, setYear] = useState(currentYear);
+  const [data, setData] = useState<AnnualStatusOverview | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (companyLoading) return;
+    if (!activeCompanyId) {
+      setData(null);
+      setError("Selecciona una empresa activa para consultar su estatus anual.");
+      return;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    setError(null);
+    void fetch(`/api/status-overview?year=${year}&kind=SERVICE`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "No fue posible cargar el estatus de servicios.");
+        setData(body as AnnualStatusOverview);
+      })
+      .catch((reason) => {
+        if (reason instanceof DOMException && reason.name === "AbortError") return;
+        setData(null);
+        setError(reason instanceof Error ? reason.message : "No fue posible cargar el estatus de servicios.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [activeCompanyId, companyLoading, year]);
+
+  const summary = data?.summary ?? { completed: 0, pending: 0, registered: 0 };
+  const years = [year - 1, year, year + 1];
+
+  return <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-10"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><div className="flex items-center gap-2 text-sm text-stone-500"><Link className="hover:text-[#14352d] dark:hover:text-emerald-300" href="/servicios">Servicios</Link><span>/</span><span>Estatus</span></div><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Estatus de servicios</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-stone-600 dark:text-stone-300">Panorama anual de los compromisos de servicios y solvencias de {data?.company.legalName ?? "la empresa activa"}.</p></div><label className="text-sm font-medium">A&ntilde;o<SimpleSelect className="field mt-1.5 w-32" onChange={(event) => setYear(Number(event.target.value))} value={year}>{years.map((option) => <option key={option} value={option}>{option}</option>)}</SimpleSelect></label></div><div className="mt-7 grid gap-4 sm:grid-cols-3"><Summary label="Pagados" value={String(summary.completed)} detail="Per&iacute;odos con cumplimiento completado" tone="emerald" /><Summary label="Por completar" value={String(summary.pending)} detail="Facturas o pagos que requieren gesti&oacute;n" tone="rose" /><Summary label="Registrados" value={String(summary.registered)} detail="Documentos presentados, pendientes de cierre" tone="amber" /></div><section className="mt-6 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">Control anual de servicios</h2><p className="mt-1 text-sm text-stone-500">Cada marca representa el estado del documento o pago de ese per&iacute;odo.</p></div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">{(["PENDING", "REGISTERED", "COMPLETED", "FUTURE"] as AnnualStatus[]).map((status) => <Legend key={status} status={status} />)}</div></div><div className="overflow-x-auto"><Table className="min-w-[980px] w-full text-left text-sm"><TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="min-w-72 px-5 py-3">Servicio</TableHead>{months.map((month) => <TableHead className="w-14 px-2 py-3 text-center" key={month}>{month}</TableHead>)}</TableRow></TableHeader><TableBody className="divide-y divide-stone-100 dark:divide-stone-800">{data?.rows.map((service) => <TableRow className="hover:bg-stone-50 dark:hover:bg-stone-800/50" key={service.offeringId}><TableCell className="px-5 py-4"><Link className="font-medium hover:text-[#14352d] dark:hover:text-emerald-300" href={service.href}>{service.name}</Link><p className="mt-0.5 text-xs text-stone-500">{service.organism}</p><p className="mt-1 text-xs text-stone-400">{service.deadlineBasis}</p></TableCell>{service.statuses.map((status, index) => <TableCell className="px-2 py-4 text-center" key={`${service.offeringId}-${months[index]}`}><Mark status={status} /></TableCell>)}</TableRow>)}</TableBody></Table></div><div className="border-t border-stone-100 bg-stone-50/60 px-5 py-3 text-xs leading-5 text-stone-500 dark:border-stone-800 dark:bg-stone-800/40">{loading ? "Cargando compromisos de servicios\u2026" : error ?? "Los estados provienen de los expedientes del calendario de la empresa activa y de sus reglas vigentes."}</div></section></div>;
+}
+
+function Mark({ status }: { status: AnnualStatus }) { const { label, className, Icon } = info[status]; return <span className={`inline-flex ${className}`} title={label}><Icon aria-label={label} size={18} /></span>; }
+function Legend({ status }: { status: AnnualStatus }) { const { label, className, Icon } = info[status]; return <span className={`inline-flex items-center gap-1 ${className}`}><Icon size={15} /> {label}</span>; }
 function Summary({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "emerald" | "rose" | "amber" }) { const colors = { emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300", rose: "bg-rose-50 text-rose-600 dark:bg-rose-950 dark:text-rose-300", amber: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300" }; const icons = { emerald: CheckCircle2, rose: CircleAlert, amber: Clock3 }; const Icon = icons[tone]; return <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex items-start justify-between"><div><p className="text-sm text-stone-500">{label}</p><p className="mt-2 text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-stone-500">{detail}</p></div><div className={`grid size-9 place-items-center rounded-lg ${colors[tone]}`}><Icon size={18} /></div></div></div>; }

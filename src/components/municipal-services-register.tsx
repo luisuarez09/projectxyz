@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { type DeadlineRule, formatDeadlineRule } from "@/lib/deadline-rules";
 
 type Service = { id: number; type: string; organism: string; reference: string; due: string; dueRule: string; amount: number; status: "Pendiente de pago" | "Vigente"; attachment: boolean };
-const municipalDeadline: DeadlineRule = { mode: "days", dayCount: 10, dayType: "business", base: "next-period-start" };
+const municipalDeadline: DeadlineRule = { mode: "days", dayCount: 10, dayType: "business", base: "period-start" };
 const invoiceDeadline: DeadlineRule = { mode: "document-date", dayCount: 0, dayType: "calendar", base: "document-date" };
 const serviceTypes = {
   "Aseo urbano": { organism: "Alcaldía · Municipio principal", deadline: municipalDeadline },

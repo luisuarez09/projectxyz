@@ -24,11 +24,10 @@ export function DeadlineRuleFields({
         {value.mode === "days" && <>
           <label className="field-label">Cantidad de días<Input className="field mt-1.5" min="1" onChange={(event) => onChange({ ...value, dayCount: Number(event.target.value) })} type="number" value={value.dayCount || ""} /></label>
           <label className="field-label">Tipo de días<SimpleSelect className="field mt-1.5" onChange={(event) => onChange({ ...value, dayType: event.target.value as DayType })} value={value.dayType}><option value="business">Días hábiles</option><option value="calendar">Días continuos</option></SimpleSelect></label>
-          <label className="field-label">Contar desde<SimpleSelect className="field mt-1.5" onChange={(event) => onChange({ ...value, base: event.target.value as DeadlineBase })} value={value.base}><option value="next-period-start">Inicio del período siguiente</option><option value="period-end">Cierre del período</option><option value="document-date">Fecha del documento</option></SimpleSelect></label>
+          <label className="field-label">Contar desde<SimpleSelect className="field mt-1.5" onChange={(event) => onChange({ ...value, base: event.target.value as DeadlineBase })} value={value.base}><option value="period-start">Inicio del período</option><option value="period-end">Cierre del período</option><option value="document-date">Fecha del documento</option></SimpleSelect></label>
         </>}
       </div>
       <p className="mt-3 rounded-lg bg-stone-50 px-3 py-2 text-xs font-medium text-stone-600 dark:bg-stone-800 dark:text-stone-300">Resultado: {formatDeadlineRule(value)}</p>
     </div>
   );
 }
-

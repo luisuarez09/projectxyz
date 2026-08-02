@@ -115,8 +115,12 @@ describe("firm services and tax catalog backend", () => {
         mode: "days",
         dayCount: 15,
         dayType: "business",
-        base: "next-period-start",
+        base: "period-start",
       },
+      evidenceRequirements: [
+        { kind: "DECLARATION_RECEIPT", required: true },
+        { kind: "DECLARATION_FILE", required: true },
+      ],
       template: "iva",
       source: "Fuente de prueba",
       appliesFrom: "2026-01-01",

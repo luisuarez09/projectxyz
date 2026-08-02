@@ -38,9 +38,9 @@ describe("company management backend", () => {
       `INSERT INTO app.firm_offerings
         (firm_id, key, kind, name, organism, frequency, deadline_mode, deadline_day_count, deadline_day_type, deadline_base, active, updated_at)
        VALUES
-        ($1, 'iva', 'TAX', 'IVA', 'SENIAT', 'Mensual', 'days', 15, 'business', 'next-period-start', true, CURRENT_TIMESTAMP),
-        ($1, 'municipal', 'TAX', 'Impuesto municipal', 'Alcaldía', 'Mensual', 'days', 10, 'business', 'next-period-start', true, CURRENT_TIMESTAMP),
-        ($1, 'inces', 'TAX', 'INCES', 'INCES', 'Trimestral', 'days', 10, 'business', 'next-period-start', true, CURRENT_TIMESTAMP),
+        ($1, 'iva', 'TAX', 'IVA', 'SENIAT', 'Mensual', 'days', 15, 'business', 'period-start', true, CURRENT_TIMESTAMP),
+        ($1, 'municipal', 'TAX', 'Impuesto municipal', 'Alcaldía', 'Mensual', 'days', 10, 'business', 'period-start', true, CURRENT_TIMESTAMP),
+        ($1, 'inces', 'TAX', 'INCES', 'INCES', 'Trimestral', 'days', 10, 'business', 'period-start', true, CURRENT_TIMESTAMP),
         ($1, 'iva-spe', 'TAX', 'IVA SPE', 'SENIAT', 'Quincenal', 'official-calendar', 0, 'calendar', 'period-end', true, CURRENT_TIMESTAMP),
         ($1, 'agua', 'SERVICE', 'Agua', 'Prestador', 'Según factura', 'document-date', 0, 'calendar', 'document-date', true, CURRENT_TIMESTAMP)`,
       [firmId],

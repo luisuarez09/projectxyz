@@ -27,8 +27,8 @@ async function main() {
     });
 
     const documentDate = { deadlineMode: "document-date", deadlineDayCount: 0, deadlineDayType: "calendar", deadlineBase: "document-date" };
-    const businessDays = (deadlineDayCount: number) => ({ deadlineMode: "days", deadlineDayCount, deadlineDayType: "business", deadlineBase: "next-period-start" });
-    const calendarDays = (deadlineDayCount: number) => ({ deadlineMode: "days", deadlineDayCount, deadlineDayType: "calendar", deadlineBase: "next-period-start" });
+    const businessDays = (deadlineDayCount: number) => ({ deadlineMode: "days", deadlineDayCount, deadlineDayType: "business", deadlineBase: "period-start" });
+    const calendarDays = (deadlineDayCount: number) => ({ deadlineMode: "days", deadlineDayCount, deadlineDayType: "calendar", deadlineBase: "period-start" });
     const pendingDeadline = businessDays(0);
     const serviceSamples = [
       { key: "electricidad", name: "Electricidad", organism: "Prestador eléctrico", frequency: "Según factura", active: true, ...documentDate },

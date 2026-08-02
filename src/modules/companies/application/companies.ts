@@ -420,6 +420,9 @@ export async function getCompanyDirectory(auth: AuthContext) {
       canManage:
         auth.firmScope &&
         auth.permissionKeys.includes(permissions.companiesManage),
+      canReconcile:
+        auth.firmScope &&
+        auth.permissionKeys.includes(permissions.calendarReconcile),
     };
   });
 }

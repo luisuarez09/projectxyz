@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 import { useCompanyContext } from "@/components/company-context";
+import { CalendarReconciliationPanel } from "@/components/calendar-reconciliation-panel";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,7 @@ type Update = <K extends keyof CompanyFormData>(
 
 export function CompanyEditor() {
   const router = useRouter();
-  const { activeCompany, canManage, loading, offerings, refresh, staff } =
+  const { activeCompany, canManage, canReconcile, loading, offerings, refresh, staff } =
     useCompanyContext();
   const [form, setForm] = useState<CompanyFormData | null>(null);
   const [saving, setSaving] = useState(false);
@@ -43,6 +44,7 @@ export function CompanyEditor() {
   const [error, setError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState("");
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     void refresh();
@@ -61,6 +63,7 @@ export function CompanyEditor() {
         : null,
     );
     setSaved(false);
+    setDirty(false);
     setError(null);
   }, [activeCompany]);
   useEffect(() => {
@@ -123,6 +126,7 @@ export function CompanyEditor() {
   const update: Update = (key, value) => {
     setForm((current) => (current ? { ...current, [key]: value } : current));
     setSaved(false);
+    setDirty(true);
   };
 
   async function save() {
@@ -147,6 +151,7 @@ export function CompanyEditor() {
         throw new Error(body.error ?? "No fue posible guardar la empresa.");
       setForm(body.company);
       setSaved(true);
+      setDirty(false);
       await refresh();
     } catch (reason) {
       setError(
@@ -400,6 +405,13 @@ export function CompanyEditor() {
                 )
               }
             />
+            {canReconcile && (
+              <CalendarReconciliationPanel
+                companyId={companyId}
+                companyName={activeCompany.legalName}
+                disabled={dirty || saving}
+              />
+            )}
           </Section>
 
           {form.taxOfferingKeys.includes("municipal") && (

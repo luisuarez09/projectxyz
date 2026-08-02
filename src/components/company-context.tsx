@@ -10,6 +10,7 @@ type CompanyDirectoryResponse = {
   staff: CompanyStaffOption[];
   offerings: CompanyOfferingOption[];
   canManage: boolean;
+  canReconcile: boolean;
 };
 
 type CompanyContextValue = CompanyDirectoryResponse & {
@@ -22,7 +23,7 @@ type CompanyContextValue = CompanyDirectoryResponse & {
 };
 
 const CompanyContext = createContext<CompanyContextValue | null>(null);
-const emptyDirectory: CompanyDirectoryResponse = { activeCompanyId: null, companies: [], staff: [], offerings: [], canManage: false };
+const emptyDirectory: CompanyDirectoryResponse = { activeCompanyId: null, companies: [], staff: [], offerings: [], canManage: false, canReconcile: false };
 
 export function CompanyProvider({ children }: { children: ReactNode }) {
   const [directory, setDirectory] = useState(emptyDirectory);

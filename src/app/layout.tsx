@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es" className={cn("font-sans", geist.variable)}>
-      <body>
+    <html lang="es" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <TooltipProvider>
           <AppShell>{children}</AppShell>
         </TooltipProvider>

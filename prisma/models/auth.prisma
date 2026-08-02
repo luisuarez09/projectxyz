@@ -1,22 +1,23 @@
 /// Better Auth core model. Runtime authentication is intentionally deferred to Phase 1.
 model User {
-  id               String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  name             String
-  email            String            @unique
-  emailVerified    Boolean           @default(false) @map("email_verified")
-  image            String?
-  twoFactorEnabled Boolean?          @default(false) @map("two_factor_enabled")
-  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
-  sessions         Session[]
-  accounts         Account[]
-  twoFactors       TwoFactor[]
-  profile          UserProfile?
-  roleAssignments  RoleAssignment[]
-  invitationsSent  Invitation[]      @relation("InvitationSender")
-  invitationsUsed  Invitation[]      @relation("InvitationAcceptor")
-  storedObjects    StoredObject[]
-  documentVersions DocumentVersion[]
+  id                        String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  name                      String
+  email                     String                   @unique
+  emailVerified             Boolean                  @default(false) @map("email_verified")
+  image                     String?
+  twoFactorEnabled          Boolean?                 @default(false) @map("two_factor_enabled")
+  createdAt                 DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  sessions                  Session[]
+  accounts                  Account[]
+  twoFactors                TwoFactor[]
+  profile                   UserProfile?
+  roleAssignments           RoleAssignment[]
+  invitationsSent           Invitation[]             @relation("InvitationSender")
+  invitationsUsed           Invitation[]             @relation("InvitationAcceptor")
+  storedObjects             StoredObject[]
+  documentVersions          DocumentVersion[]
+  complianceEvidenceUploads ComplianceCaseEvidence[]
 
   @@map("users")
   @@schema("auth")

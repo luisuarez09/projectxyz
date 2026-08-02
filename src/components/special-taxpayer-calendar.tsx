@@ -39,6 +39,21 @@ import type {
   FiscalCalendarMatrix,
 } from "@/modules/firm/domain/catalog";
 
+const monthlyColumns = [
+  "ENE",
+  "FEB",
+  "MAR",
+  "ABR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AGO",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DIC",
+];
+
 export function SpecialTaxpayerCalendar() {
   const [calendar, setCalendar] = useState<FiscalCalendar | null>(null);
   const [selectedId, setSelectedId] = useState("");
@@ -82,6 +97,10 @@ export function SpecialTaxpayerCalendar() {
   const matrices = calendar?.matrices ?? [];
   const selected =
     matrices.find((matrix) => matrix.id === selectedId) ?? matrices[0];
+  const visibleColumns =
+    selected && editing && !selected.columns.includes("FECHA")
+      ? monthlyColumns
+      : (selected?.columns ?? []);
   const totalDates = useMemo(
     () =>
       matrices.reduce(
@@ -346,20 +365,7 @@ export function SpecialTaxpayerCalendar() {
                       period: String(calendar.year),
                       offeringIds: [],
                       obligations: [],
-                      columns: [
-                        "ENE",
-                        "FEB",
-                        "MAR",
-                        "ABR",
-                        "MAY",
-                        "JUN",
-                        "JUL",
-                        "AGO",
-                        "SEP",
-                        "OCT",
-                        "NOV",
-                        "DIC",
-                      ],
+                      columns: monthlyColumns,
                       rows: Array.from({ length: 10 }, (_, terminal) => ({
                         rif: String(terminal),
                         dates: {},
@@ -402,7 +408,7 @@ export function SpecialTaxpayerCalendar() {
                 <TableHead className="sticky left-0 z-10 min-w-24 bg-stone-50 px-4 py-3 text-left dark:bg-stone-800">
                   Terminal RIF
                 </TableHead>
-                {selected.columns.map((column) => (
+                {visibleColumns.map((column) => (
                   <TableHead
                     className="min-w-14 px-2 py-3 text-center"
                     key={column}
@@ -418,7 +424,7 @@ export function SpecialTaxpayerCalendar() {
                   <TableCell className="sticky left-0 bg-white px-4 py-3 text-left font-semibold dark:bg-stone-900">
                     {row.rif}
                   </TableCell>
-                  {selected.columns.map((column) => (
+                  {visibleColumns.map((column) => (
                     <TableCell
                       className="px-1.5 py-2"
                       key={`${row.rif}-${column}`}

@@ -14,11 +14,11 @@ const declarations: Declaration[] = [
   { id: "inces-q2", tax: "INCES · 2do trimestre", period: "Abril a junio 2026", cadence: "Trimestral", deadlineBasis: "Regla pendiente de configurar", due: "Por configurar", status: "En preparación", amount: "Bs. 2.996,10", owner: "MA" },
   { id: "faov-jun", tax: "FAOV · Fondo de Ahorro Obligatorio", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "Regla pendiente de configurar", due: "Por configurar", status: "En preparación", amount: "—", owner: "MA" },
   { id: "dpp-jun", tax: "DPP · Protección a las pensiones", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "Regla configurada en la firma", due: "27 jul 2026", status: "En preparación", amount: "Bs. 53.829,10", owner: "MA" },
-  { id: "ivss-jun", tax: "IVSS · Seguro Social", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "5 días continuos · período siguiente", due: "Por configurar", status: "En preparación", amount: "Bs. 855,00", owner: "MA" },
-  { id: "iva-jun", tax: "IVA", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "15 días hábiles · período siguiente", due: "30 jul 2026", status: "En preparación", amount: "—", owner: "MA" },
-  { id: "municipal-main", tax: "Actividades económicas · Municipio principal", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "10 días hábiles · período siguiente", due: "31 jul 2026", status: "En preparación", amount: "Bs. 1.006,72", owner: "MA" },
-  { id: "municipal-branch", tax: "Actividades económicas · Sucursal", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "10 días hábiles · período siguiente", due: "31 jul 2026", status: "En preparación", amount: "Bs. 687,60", owner: "MA" },
-  { id: "iva-may", tax: "IVA", period: "Mayo 2026", cadence: "Mensual", deadlineBasis: "15 días hábiles · período siguiente", due: "30 jun 2026", status: "Pagada", amount: "Bs. 14.820,00", owner: "MA" },
+  { id: "ivss-jun", tax: "IVSS · Seguro Social", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "5 días continuos · inicio del período", due: "5 jun 2026", status: "En preparación", amount: "Bs. 855,00", owner: "MA" },
+  { id: "iva-jun", tax: "IVA", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "15 días hábiles · inicio del período", due: "19 jun 2026", status: "En preparación", amount: "—", owner: "MA" },
+  { id: "municipal-main", tax: "Actividades económicas · Municipio principal", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "10 días hábiles · inicio del período", due: "12 jun 2026", status: "En preparación", amount: "Bs. 1.006,72", owner: "MA" },
+  { id: "municipal-branch", tax: "Actividades económicas · Sucursal", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "10 días hábiles · inicio del período", due: "12 jun 2026", status: "En preparación", amount: "Bs. 687,60", owner: "MA" },
+  { id: "iva-may", tax: "IVA", period: "Mayo 2026", cadence: "Mensual", deadlineBasis: "15 días hábiles · inicio del período", due: "21 may 2026", status: "Pagada", amount: "Bs. 14.820,00", owner: "MA" },
   { id: "islr-jun", tax: "Retención ISLR", period: "Junio 2026", cadence: "Mensual", deadlineBasis: "Regla configurada en la firma", due: "31 jul 2026", status: "Listo para revisión", amount: "Bs. 8.442,90", owner: "LU" },
 ];
 

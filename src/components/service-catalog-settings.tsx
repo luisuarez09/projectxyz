@@ -40,6 +40,7 @@ const emptyService: FirmOffering = {
   speFrequency: "No aplica",
   speCalendarGroup: "",
   deadline: { ...emptyDeadlineRule },
+  evidenceRequirements: [],
   template: "none",
   source: "",
   appliesFrom: "",

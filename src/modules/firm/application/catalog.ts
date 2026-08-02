@@ -11,6 +11,17 @@ import {
 import { permissions } from "@/modules/identity/domain/permissions";
 import type { AuthContext } from "@/modules/shared/application/context";
 
+const evidenceRequirementSchema = z.object({
+  kind: z.enum([
+    "SOLVENCY",
+    "DECLARATION_RECEIPT",
+    "DECLARATION_FILE",
+    "PAYMENT_FORM",
+    "PAYMENT_RECEIPT",
+  ]),
+  required: z.boolean(),
+});
+
 const dateText = z
   .string()
   .trim()
@@ -25,7 +36,11 @@ const deadlineSchema = z.object({
   mode: z.enum(["days", "official-calendar", "document-date"]),
   dayCount: z.number().int().min(0).max(366),
   dayType: z.enum(["business", "calendar"]),
-  base: z.enum(["next-period-start", "period-end", "document-date"]),
+  base: z
+    .enum(["period-start", "next-period-start", "period-end", "document-date"])
+    .transform((value) =>
+      value === "next-period-start" ? ("period-start" as const) : value,
+    ),
 });
 const offeringFields = z.object({
   key: z.string().trim().max(100).optional(),
@@ -39,6 +54,15 @@ const offeringFields = z.object({
   speFrequency: z.string().trim().max(80).default("No aplica"),
   speCalendarGroup: z.string().trim().max(100).default(""),
   deadline: deadlineSchema,
+  evidenceRequirements: z
+    .array(evidenceRequirementSchema)
+    .max(5)
+    .refine(
+      (requirements) =>
+        new Set(requirements.map(({ kind }) => kind)).size === requirements.length,
+      "No repitas tipos de soporte.",
+    )
+    .default([]),
   template: z
     .enum(["iva", "dpp", "inces", "ivss", "faov", "none"])
     .default("none"),
@@ -138,8 +162,15 @@ function serializeOffering(
       mode: offering.deadlineMode,
       dayCount: offering.deadlineDayCount,
       dayType: offering.deadlineDayType,
-      base: offering.deadlineBase,
+      base:
+        offering.deadlineBase === "next-period-start"
+          ? "period-start"
+          : offering.deadlineBase,
     },
+    evidenceRequirements: evidenceRequirementSchema
+      .array()
+      .catch([])
+      .parse(offering.evidenceRequirements),
     template: offering.templateKey ?? "none",
     source: offering.source ?? "",
     appliesFrom: isoDate(offering.effectiveFrom),
@@ -278,6 +309,7 @@ export async function getFirmCatalog(auth: AuthContext) {
       ),
       calendars: calendars.map(serializeCalendar),
       canManage: auth.permissionKeys.includes(permissions.firmSettingsUpdate),
+      canReconcile: auth.permissionKeys.includes(permissions.calendarReconcile),
     };
   });
 }
@@ -301,8 +333,23 @@ function offeringData(input: z.infer<typeof offeringFields>) {
     throw new Error(
       "Un impuesto necesita fuente y vigencia antes de habilitarse.",
     );
-  if (input.deadline.mode === "days" && input.deadline.dayCount < 1)
+  const needsOrdinaryRule =
+    input.kind === "SERVICE" || input.taxpayerCondition !== "SPECIAL_TAXPAYER";
+  const needsSpecialRule =
+    input.kind === "TAX" && input.taxpayerCondition !== "ORDINARY";
+  if (
+    needsOrdinaryRule &&
+    input.deadline.mode === "days" &&
+    input.deadline.dayCount < 1
+  )
     throw new Error("Configura el vencimiento antes de guardar.");
+  if (
+    needsSpecialRule &&
+    (input.speFrequency === "No aplica" || !input.speCalendarGroup)
+  )
+    throw new Error("Configura la periodicidad y la matriz para contribuyentes especiales.");
+  if (input.active && input.kind === "TAX" && !input.evidenceRequirements.length)
+    throw new Error("Habilita al menos un soporte para el expediente del impuesto.");
   return {
     kind: input.kind,
     taxpayerCondition:
@@ -311,11 +358,15 @@ function offeringData(input: z.infer<typeof offeringFields>) {
     organism: input.organism,
     frequency: input.frequency,
     speFrequency:
-      input.speFrequency === "No aplica" ? null : input.speFrequency,
+      input.taxpayerCondition === "ORDINARY" || input.speFrequency === "No aplica"
+        ? null
+        : input.speFrequency,
     deadlineMode: input.deadline.mode,
     deadlineDayCount: input.deadline.dayCount,
     deadlineDayType: input.deadline.dayType,
     deadlineBase: input.deadline.base,
+    evidenceRequirements:
+      input.kind === "TAX" ? input.evidenceRequirements : [],
     templateKey: input.template === "none" ? null : input.template,
     source: input.source || null,
     effectiveFrom: input.appliesFrom,
@@ -346,7 +397,7 @@ export async function createFirmOffering(auth: AuthContext, rawInput: unknown) {
       transaction,
       auth.firmId,
       offering.id,
-      input.speCalendarGroup,
+      input.taxpayerCondition === "ORDINARY" ? "" : input.speCalendarGroup,
     );
     await audit(transaction, auth, "firm.offering.created", offering.id, {
       key,
@@ -381,7 +432,7 @@ export async function updateFirmOffering(
       transaction,
       auth.firmId,
       offeringId,
-      input.speCalendarGroup,
+      input.taxpayerCondition === "ORDINARY" ? "" : input.speCalendarGroup,
     );
     await audit(transaction, auth, "firm.offering.updated", offeringId, {
       version: input.version + 1,

@@ -131,4 +131,38 @@ describe("PostgreSQL foundation", () => {
       await migrator.query("DELETE FROM app.firms WHERE id = ANY($1::uuid[])", [[firstFirm.rows[0].id, secondFirm.rows[0].id]]);
     }
   });
+
+  it("isolates SMTP settings by firm and keeps notifications disabled before verification", async () => {
+    const suffix = crypto.randomUUID().slice(0, 8);
+    const firstFirm = (await migrator.query<{ id: string }>(
+      `INSERT INTO app.firms (legal_name, updated_at) VALUES ($1, CURRENT_TIMESTAMP) RETURNING id`,
+      [`Firma correo A ${suffix}`],
+    )).rows[0].id;
+    const secondFirm = (await migrator.query<{ id: string }>(
+      `INSERT INTO app.firms (legal_name, updated_at) VALUES ($1, CURRENT_TIMESTAMP) RETURNING id`,
+      [`Firma correo B ${suffix}`],
+    )).rows[0].id;
+
+    try {
+      await migrator.query(
+        `INSERT INTO app.firm_mail_settings (firm_id, smtp_host, updated_at)
+         VALUES ($1, 'smtp-a.example.test', CURRENT_TIMESTAMP), ($2, 'smtp-b.example.test', CURRENT_TIMESTAMP)`,
+        [firstFirm, secondFirm],
+      );
+
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.firm_id', $1, true)", [firstFirm]);
+      await client.query("SELECT set_config('app.firm_scope', 'true', true)");
+      const visible = await client.query<{ firm_id: string; enabled: boolean }>(
+        "SELECT firm_id, enabled FROM app.firm_mail_settings",
+      );
+      await client.query("ROLLBACK");
+
+      expect(visible.rows).toEqual([{ firm_id: firstFirm, enabled: false }]);
+    } finally {
+      await client.query("ROLLBACK").catch(() => undefined);
+      await migrator.query("DELETE FROM app.firm_mail_settings WHERE firm_id = ANY($1::uuid[])", [[firstFirm, secondFirm]]);
+      await migrator.query("DELETE FROM app.firms WHERE id = ANY($1::uuid[])", [[firstFirm, secondFirm]]);
+    }
+  });
 });

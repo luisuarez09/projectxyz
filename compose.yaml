@@ -82,8 +82,14 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: 3310
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-development-only-secret-change-me-0001}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      CREDENTIAL_ENCRYPTION_ACTIVE_KEY: ${CREDENTIAL_ENCRYPTION_ACTIVE_KEY:-v1}
+      CREDENTIAL_ENCRYPTION_KEY_V1: ${CREDENTIAL_ENCRYPTION_KEY_V1:-}
     ports:
-      - "127.0.0.1:${APP_PORT:-3000}:3000"
+      - "${APP_HOST:-127.0.0.1}:${APP_PORT:-3000}:3000"
     volumes:
       - .:/app
       - web_node_modules:/app/node_modules
@@ -111,6 +117,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${WORKER_DATABASE_USER:-proyectoxyz_worker}:${WORKER_DATABASE_PASSWORD:-local_worker_password}@postgres:5432/${POSTGRES_DB:-proyectoxyz}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      CREDENTIAL_ENCRYPTION_ACTIVE_KEY: ${CREDENTIAL_ENCRYPTION_ACTIVE_KEY:-v1}
+      CREDENTIAL_ENCRYPTION_KEY_V1: ${CREDENTIAL_ENCRYPTION_KEY_V1:-}
     volumes:
       - .:/app
       - worker_node_modules:/app/node_modules

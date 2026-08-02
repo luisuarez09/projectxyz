@@ -5,8 +5,9 @@ Estado: **aprobado para implementación**
 Proyecto: `proyectoxyz`
 
 Este documento reúne los dos planes aprobados para construir el backend del
-proyecto. Todavía no representa funcionalidad implementada. Las fases deben
-ejecutarse y validarse de manera incremental.
+proyecto. La Fase 0 está implementada y la Fase 1 se encuentra en ejecución
+incremental; el estado de cada integración debe comprobarse antes de declararla
+productiva.
 
 ## Decisiones confirmadas
 
@@ -379,6 +380,12 @@ El correo saliente se enviará mediante Nodemailer y Mailrelay SMTP. Mailrelay
 entrega el host, puerto, usuario y contraseña específicos al activar
 `Configuración > Configuraciones SMTP`; no se codificará un host supuesto.
 
+La firma administrará estos valores desde `Configuración > Correo`. La
+contraseña se cifra con AES-256-GCM y una clave maestra versionada que permanece
+fuera de PostgreSQL. La interfaz nunca devuelve la contraseña guardada. Las
+variables SMTP siguientes se conservan para correos técnicos previos a disponer
+del contexto de firma y para recuperación operativa; no sustituyen el panel.
+
 ```dotenv
 SMTP_HOST=<host-mostrado-por-mailrelay>
 SMTP_PORT=587
@@ -402,6 +409,8 @@ Requisitos:
 - SPF, DKIM y DMARC deben estar configurados antes de producción.
 - La cuenta Mailrelay tendrá MFA habilitado si el plan/cuenta lo ofrece.
 - La contraseña SMTP se guardará como secreto de producción y podrá rotarse.
+- Cualquier cambio de conexión, dominio o remitente desactivará los envíos y
+  exigirá una nueva prueba SMTP antes de reactivarlos.
 - Los correos se crearán como trabajos `pg-boss` y se enviarán fuera de la
   petición web.
 - Los errores SMTP temporales usarán reintentos con backoff; los permanentes se
@@ -468,6 +477,18 @@ las pantallas a datos productivos.
 - No se ha conectado todavía ninguna pantalla funcional.
 
 ### Fase 1 — Identidad, permisos, empresas y documentos
+
+Estado al 1 de agosto de 2026: **en ejecución**. Ya existen el alta exclusiva
+por invitación, sesiones y MFA base con Better Auth, modelos de firma, clientes,
+empresas, sucursales, roles y documentos, `AuthContext`, RLS, auditoría de los
+flujos implementados, plantillas de identidad, configuración SMTP cifrada por
+firma, configuración general persistente y directorio real del equipo con roles,
+alcance multiempresa, invitaciones y baja lógica. El panel de supervisión del
+equipo ya usa identidades y asignaciones reales; los indicadores de tareas se
+mantienen pendientes hasta existir expedientes reales. Sigue pendiente conectar
+el selector de empresa, los directorios de clientes/empresas, documentos en
+cuarentena y recorridos de los cuatro perfiles; por ello la fase aún no se
+declara terminada.
 
 - Implementar Better Auth con alta sólo por invitación.
 - Conectar verificación, recuperación, sesiones y MFA.

@@ -1,16 +1,17 @@
 # Requisitos pendientes del VPS y Mailrelay
 
-Estado al inicio de la Fase 1: **pendiente de provisión externa**. Estos puntos
-no bloquean el desarrollo local, pero sí bloquean declarar producción lista.
+Estado al 1 de agosto de 2026: **VPS contratado; dominio, Mailrelay y respaldo
+automático pendientes**. Estos puntos no bloquean el desarrollo local, pero sí
+bloquean declarar producción lista.
 
 ## VPS Contabo
 
-- Confirmar el detalle del plan VPS 1: CPU, 8 GB de RAM, almacenamiento útil,
-  tipo de disco, IOPS y sistema operativo instalado.
-- Confirmar que Contabo Auto Backup está contratado, activo y cubre las rutas
+- VPS 1 confirmado: Ubuntu, 4 vCPU, 8 GB de RAM, SSD de 100 GB, puerto de
+  200 Mbit con tráfico ilimitado y un snapshot incluido.
+- Activar Contabo Auto Backup y confirmar que cubre las rutas
   donde se guardarán dumps y manifiestos. Si sólo hay snapshots manuales, el
   paso a producción queda bloqueado.
-- Proveer dominio y control DNS; definir el hostname público y el correo
+- Comprar un dominio y conservar control DNS; definir el hostname público y el correo
   operativo para certificados TLS de Caddy.
 - Instalar y endurecer Linux, Docker Engine y Compose; restringir SSH por llave,
   aplicar actualizaciones, NTP, firewall y monitoreo de disco/memoria.
@@ -28,7 +29,9 @@ no bloquean el desarrollo local, pero sí bloquean declarar producción lista.
 
 ## Mailrelay
 
-- Crear o confirmar la cuenta Mailrelay usando un correo de dominio propio.
+- Crear la cuenta Mailrelay cuando exista un correo de dominio propio. El correo
+  personal `lsuarez.asesor@gmail.com` se usará para el acceso administrativo,
+  no como remitente corporativo verificado.
 - Crear los remitentes definitivos y configurar SPF, DKIM y DMARC en DNS.
 - En `Configuración > Configuraciones SMTP`, activar SMTP y guardar en un gestor
   de secretos el host, puerto, usuario y contraseña que muestre el panel.
@@ -42,6 +45,8 @@ no bloquean el desarrollo local, pero sí bloquean declarar producción lista.
 - Acordar retención de eventos, alertas por rebotes/bloqueos, límites de envío y
   procedimiento de rotación o revocación de la contraseña SMTP.
 
-La aplicación utilizará Nodemailer y variables SMTP genéricas. Los secretos se
-cargarán localmente o en el VPS mediante el mecanismo de secretos del entorno;
-nunca deben enviarse por chat ni guardarse en Git.
+La aplicación utilizará Nodemailer y una configuración SMTP genérica por firma.
+La contraseña SMTP se cifrará antes de guardarse; la clave maestra versionada se
+cargará localmente o en el VPS mediante secretos del entorno y nunca se
+guardará en PostgreSQL, se enviará por chat ni se versionará en Git. Los envíos
+permanecerán desactivados hasta completar el dominio y verificar la conexión.

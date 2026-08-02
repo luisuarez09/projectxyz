@@ -1,57 +1,909 @@
-"use client";;
-import { Building2, Check, ChevronLeft, ChevronRight, FileText, Landmark, LockKeyhole, Minus, Plus, UsersRound } from "lucide-react";
-import { useState } from "react";
+"use client";
 
+import {
+  Building2,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Landmark,
+  LockKeyhole,
+  Minus,
+  Plus,
+  UsersRound,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+import { useCompanyContext } from "@/components/company-context";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/simple-select";
+import {
+  emptyCompanyForm,
+  offeringAppliesToCompany,
+  type CompanyFormData,
+  type CompanyOfferingOption,
+} from "@/modules/companies/domain/company";
 
-const steps = [{ label: "Identidad", icon: Building2 }, { label: "Legal", icon: Landmark }, { label: "Servicio", icon: FileText }, { label: "Accesos", icon: UsersRound }];
-const obligations = ["IVA", "Retenciones de IVA", "Retenciones de ISLR", "Impuesto municipal", "IGTF", "IVSS", "FAOV", "INCES", "Parafiscales", "Patente o licencia de actividades", "Servicios públicos"];
+const steps = [
+  { label: "Identidad", icon: Building2 },
+  { label: "Legal", icon: Landmark },
+  { label: "Servicio", icon: FileText },
+  { label: "Accesos", icon: UsersRound },
+];
 
 export function NewCompanyWizard() {
+  const router = useRouter();
+  const { canManage, offerings, refresh, staff } = useCompanyContext();
   const [step, setStep] = useState(0);
-  const [branches, setBranches] = useState(false);
-  const [branchCount, setBranchCount] = useState(1);
-  const [officerCount, setOfficerCount] = useState(1);
-  const [clientPortal, setClientPortal] = useState(false);
-  const [restrictedAccess, setRestrictedAccess] = useState(false);
-  const [taxpayerType, setTaxpayerType] = useState("");
+  const [form, setForm] = useState<CompanyFormData>(() => ({
+    ...emptyCompanyForm,
+    branches: [],
+    officers: [],
+  }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const current = steps[step];
   const StepIcon = current.icon;
+  const update = <K extends keyof CompanyFormData>(
+    key: K,
+    value: CompanyFormData[K],
+  ) => setForm((state) => ({ ...state, [key]: value }));
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+  useEffect(() => {
+    setForm((current) => {
+      const allowedTaxKeys = new Set(
+        offerings
+          .filter(
+            (offering) =>
+              offering.kind === "TAX" &&
+              offeringAppliesToCompany(offering, current.taxpayerType),
+          )
+          .map(({ id }) => id),
+      );
+      const taxOfferingKeys = current.taxOfferingKeys.filter((key) =>
+        allowedTaxKeys.has(key),
+      );
+      return taxOfferingKeys.length === current.taxOfferingKeys.length
+        ? current
+        : { ...current, taxOfferingKeys };
+    });
+  }, [offerings, form.taxpayerType]);
 
-  return <>
-    <div className="mt-7 grid gap-2 sm:grid-cols-4">{steps.map((item, index) => {
-      const Icon = item.icon; const active = index === step; const done = index < step;
-      return <button aria-current={active ? "step" : undefined} className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm transition ${active ? "border-[#14352d] bg-[#14352d] text-white dark:border-emerald-500 dark:bg-emerald-500 dark:text-stone-950" : done ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-stone-200 bg-white text-stone-500 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400"}`} key={item.label} onClick={() => setStep(index)} type="button"><span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/10 text-xs font-semibold">{done ? <Check size={15} /> : <Icon size={15} />}</span><span><span className="block text-xs opacity-70">Paso {index + 1}</span>{item.label}</span></button>;
-    })}</div>
-    <Card className="mt-5 border-stone-200 shadow-sm dark:border-stone-800">
-      <CardHeader className="border-b border-stone-100 dark:border-stone-800"><div className="flex items-start gap-3"><div className="grid size-10 place-items-center rounded-xl bg-[#e8f1ec] text-[#14352d] dark:bg-emerald-950 dark:text-emerald-300"><StepIcon size={19} /></div><div><CardTitle>{step === 0 && "Identidad fiscal"}{step === 1 && "Expediente legal y gobierno corporativo"}{step === 2 && "Plan y obligaciones a controlar"}{step === 3 && "Accesos y portal del cliente"}</CardTitle><CardDescription className="mt-1">{step === 0 && "Datos base, domicilio fiscal y sucursales."}{step === 1 && "Añade cada cargo y responsable de acuerdo con el documento constitutivo."}{step === 2 && "El plan define el servicio; selecciona las obligaciones que deben vigilarse."}{step === 3 && "Activa cada acceso de forma explícita; ambos son independientes."}</CardDescription></div></div></CardHeader>
-      <CardContent className="pt-6">
-        {step === 0 && <IdentityStep branches={branches} branchCount={branchCount} setBranchCount={setBranchCount} setBranches={setBranches} setTaxpayerType={setTaxpayerType} taxpayerType={taxpayerType} />}
-        {step === 1 && <LegalStep officerCount={officerCount} setOfficerCount={setOfficerCount} />}
-        {step === 2 && <ServiceStep special={taxpayerType === "Sujeto pasivo especial"} />}
-        {step === 3 && <AccessStep clientPortal={clientPortal} restrictedAccess={restrictedAccess} setClientPortal={setClientPortal} setRestrictedAccess={setRestrictedAccess} />}
-        <div className="mt-7 flex items-center justify-between border-t border-stone-100 pt-5 dark:border-stone-800"><Button disabled={step === 0} onClick={() => setStep((value) => value - 1)} type="button" variant="outline"><ChevronLeft size={16} /> Anterior</Button>{step < steps.length - 1 ? <Button className="bg-[#14352d] hover:bg-[#0e2821] dark:bg-emerald-500 dark:text-stone-950 dark:hover:bg-emerald-400" onClick={() => setStep((value) => value + 1)} type="button">Continuar <ChevronRight size={16} /></Button> : <Button className="bg-[#14352d] hover:bg-[#0e2821] dark:bg-emerald-500 dark:text-stone-950 dark:hover:bg-emerald-400" type="button"><Check size={16} /> Crear empresa</Button>}</div>
-      </CardContent>
-    </Card>
-  </>;
+  async function submit() {
+    setSaving(true);
+    setError(null);
+    try {
+      const allowedTaxKeys = new Set(
+        offerings
+          .filter(
+            (offering) =>
+              offering.kind === "TAX" &&
+              offeringAppliesToCompany(offering, form.taxpayerType),
+          )
+          .map(({ id }) => id),
+      );
+      const response = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          taxOfferingKeys: form.taxOfferingKeys.filter((key) =>
+            allowedTaxKeys.has(key),
+          ),
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok)
+        throw new Error(body.error ?? "No fue posible crear la empresa.");
+      await refresh();
+      router.push("/configuracion/empresa");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "No fue posible crear la empresa.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!canManage)
+    return (
+      <div className="mt-7 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+        Tu cuenta no tiene permiso para crear empresas.
+      </div>
+    );
+
+  return (
+    <>
+      <div className="mt-7 grid gap-2 sm:grid-cols-4">
+        {steps.map((item, index) => {
+          const Icon = item.icon;
+          const active = index === step;
+          const done = index < step;
+          return (
+            <button
+              aria-current={active ? "step" : undefined}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-3 text-left text-sm transition ${active ? "border-[#14352d] bg-[#14352d] text-white" : done ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-white text-stone-500 dark:border-stone-800 dark:bg-stone-900"}`}
+              key={item.label}
+              onClick={() => setStep(index)}
+              type="button"
+            >
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/10 text-xs font-semibold">
+                {done ? <Check size={15} /> : <Icon size={15} />}
+              </span>
+              <span>
+                <span className="block text-xs opacity-70">
+                  Paso {index + 1}
+                </span>
+                {item.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <Card className="mt-5 border-stone-200 shadow-sm dark:border-stone-800">
+        <CardHeader className="border-b border-stone-100 dark:border-stone-800">
+          <div className="flex items-start gap-3">
+            <div className="grid size-10 place-items-center rounded-xl bg-[#e8f1ec] text-[#14352d]">
+              <StepIcon size={19} />
+            </div>
+            <div>
+              <CardTitle>
+                {
+                  [
+                    "Identidad y registros",
+                    "Expediente legal",
+                    "Cobertura e INCES",
+                    "Accesos",
+                  ][step]
+                }
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Todos estos datos formarán la misma ficha que luego editarás en
+                Configuración de empresa.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {step === 0 && (
+            <IdentityStep form={form} staff={staff} update={update} />
+          )}
+          {step === 1 && <LegalStep form={form} update={update} />}
+          {step === 2 && (
+            <ServiceStep form={form} offerings={offerings} update={update} />
+          )}
+          {step === 3 && <AccessStep form={form} update={update} />}
+          {error && (
+            <p className="mt-5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+              {error}
+            </p>
+          )}
+          <div className="mt-7 flex items-center justify-between border-t border-stone-100 pt-5 dark:border-stone-800">
+            <Button
+              disabled={step === 0 || saving}
+              onClick={() => setStep((value) => value - 1)}
+              variant="outline"
+            >
+              <ChevronLeft size={16} /> Anterior
+            </Button>
+            {step < steps.length - 1 ? (
+              <Button
+                className="bg-[#14352d] hover:bg-[#0e2821]"
+                onClick={() => setStep((value) => value + 1)}
+              >
+                Continuar <ChevronRight size={16} />
+              </Button>
+            ) : (
+              <Button
+                className="bg-[#14352d] hover:bg-[#0e2821]"
+                disabled={saving || !form.legalName.trim() || !form.rif.trim()}
+                onClick={() => void submit()}
+              >
+                <Check size={16} />{" "}
+                {saving ? "Creando…" : "Crear y activar empresa"}
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
 }
 
-function IdentityStep({ branches, branchCount, setBranches, setBranchCount, taxpayerType, setTaxpayerType }: { branches: boolean; branchCount: number; setBranches: (value: boolean) => void; setBranchCount: (value: number) => void; taxpayerType: string; setTaxpayerType: (value: string) => void }) {
-  return <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><Field label="Razón social" placeholder="Ej. Inversiones ABC, C.A." /><Field label="RIF" placeholder="J-00000000-0" /><label className="text-sm font-medium">Tipo de contribuyente<SimpleSelect className="field mt-1.5" onChange={(event) => setTaxpayerType(event.target.value)} value={taxpayerType}><option disabled value="">Selecciona una opción</option>{["Ordinario", "Sujeto pasivo especial", "Exento o exonerado", "Por definir"].map((option) => <option key={option}>{option}</option>)}</SimpleSelect></label><Field label="Actividad económica" placeholder="Ej. Comercio al mayor" /><div className="sm:col-span-2"><Field label="Dirección fiscal" placeholder="Estado, municipio, parroquia, avenida, edificio y referencia" /></div><Field label="Contacto principal" placeholder="Nombre y apellido" /><Field label="Correo de contacto" placeholder="correo@empresa.com" type="email" /></div>{taxpayerType === "Sujeto pasivo especial" && <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 text-sm text-violet-950 dark:border-violet-900 dark:bg-violet-950/25 dark:text-violet-100"><p className="font-semibold">Se aplicará el régimen SPE</p><p className="mt-1 leading-5">El sistema usará el terminal del RIF para consultar el calendario anual de la firma y preparará IVA, Retenciones de IVA e IGTF por quincena.</p></div>}<section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800"><p className="text-sm font-semibold">Registros patronales</p><p className="mt-1 text-xs leading-5 text-stone-500">Se usan para preparar los expedientes IVSS y FAOV de esta empresa.</p><div className="mt-4 grid gap-4 sm:grid-cols-2"><Field label="Número patronal · IVSS" placeholder="Ej. 123456789" /><Field label="N.º de afiliación de nómina · FAOV" placeholder="Ej. 0321085357530000000" /></div></section><label className="flex cursor-pointer items-center gap-3 rounded-xl border border-stone-200 p-3 text-sm dark:border-stone-800"><input checked={branches} className="size-4 accent-[#14352d]" onChange={(event) => setBranches(event.target.checked)} type="checkbox" /> <span><span className="font-medium">Esta empresa posee sucursales</span><span className="ml-2 text-xs text-stone-500">Agrega sus direcciones ahora.</span></span></label>{branches && <div className="rounded-xl border border-[#a8c6b5] bg-[#f4faf6] p-4 dark:border-emerald-900 dark:bg-emerald-950/20"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-[#14352d] dark:text-emerald-200">Sucursales</p><p className="text-xs text-stone-600 dark:text-stone-300">Cada sucursal tendrá su propia dirección y podrá configurarse después con más detalle.</p></div><Button onClick={() => setBranchCount(branchCount + 1)} size="sm" type="button" variant="outline"><Plus size={15} /> Añadir</Button></div><div className="mt-4 space-y-3">{Array.from({ length: branchCount }, (_, index) => <div className="grid gap-3 rounded-lg border border-emerald-100 bg-white p-3 sm:grid-cols-[1fr_2fr_auto] dark:border-emerald-950 dark:bg-stone-950" key={index}><Field label={`Sucursal ${index + 1}`} placeholder="Ej. Sucursal Valencia" /><Field label="Dirección" placeholder="Estado, municipio y referencia" />{branchCount > 1 && <Button aria-label={`Eliminar sucursal ${index + 1}`} className="self-end" onClick={() => setBranchCount(branchCount - 1)} size="icon" type="button" variant="ghost"><Minus size={16} /></Button>}</div>)}</div></div>}</div>;
+type Update = <K extends keyof CompanyFormData>(
+  key: K,
+  value: CompanyFormData[K],
+) => void;
+
+function IdentityStep({
+  form,
+  staff,
+  update,
+}: {
+  form: CompanyFormData;
+  staff: { id: string; name: string }[];
+  update: Update;
+}) {
+  const addBranch = () =>
+    update("branches", [...form.branches, { name: "", code: "", address: "" }]);
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TextField
+          label="Razón social"
+          required
+          value={form.legalName}
+          onChange={(value) => update("legalName", value)}
+          placeholder="Ej. Inversiones ABC, C.A."
+        />
+        <TextField
+          label="Nombre comercial"
+          value={form.tradeName}
+          onChange={(value) => update("tradeName", value)}
+        />
+        <TextField
+          label="RIF"
+          required
+          value={form.rif}
+          onChange={(value) => update("rif", value)}
+          placeholder="J-00000000-0"
+        />
+        <SelectField
+          label="Tipo de contribuyente"
+          value={form.taxpayerType}
+          onChange={(value) => update("taxpayerType", value)}
+          options={[
+            "Ordinario",
+            "Formal",
+            "Sujeto pasivo especial",
+            "Exento o exonerado",
+            "Por definir",
+          ]}
+        />
+        <TextField
+          label="Actividad económica"
+          value={form.activity}
+          onChange={(value) => update("activity", value)}
+        />
+        <label className="text-sm font-medium">
+          Contador responsable
+          <SimpleSelect
+            className="field mt-1.5"
+            onChange={(event) =>
+              update("responsibleProfileId", event.target.value)
+            }
+            value={form.responsibleProfileId}
+          >
+            <option value="">Sin asignar</option>
+            {staff.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </SimpleSelect>
+        </label>
+        <div className="sm:col-span-2">
+          <TextField
+            label="Domicilio fiscal"
+            value={form.fiscalAddress}
+            onChange={(value) => update("fiscalAddress", value)}
+          />
+        </div>
+        <TextField
+          label="Contacto principal"
+          value={form.contactName}
+          onChange={(value) => update("contactName", value)}
+        />
+        <TextField
+          label="Correo de contacto"
+          type="email"
+          value={form.contactEmail}
+          onChange={(value) => update("contactEmail", value)}
+        />
+        <TextField
+          label="Teléfono de contacto"
+          value={form.contactPhone}
+          onChange={(value) => update("contactPhone", value)}
+        />
+        <TextField
+          label="Número patronal · IVSS"
+          value={form.ivssEmployerNumber}
+          onChange={(value) => update("ivssEmployerNumber", value)}
+        />
+        <TextField
+          label="N.º de afiliación · FAOV"
+          value={form.faovPayrollNumber}
+          onChange={(value) => update("faovPayrollNumber", value)}
+        />
+      </div>
+      <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Sucursales</p>
+            <p className="mt-1 text-xs text-stone-500">
+              Déjalo vacío si la empresa solo tiene casa matriz.
+            </p>
+          </div>
+          <Button onClick={addBranch} size="sm" variant="outline">
+            <Plus size={15} /> Añadir
+          </Button>
+        </div>
+        <div className="mt-4 space-y-3">
+          {form.branches.map((branch, index) => (
+            <div
+              className="grid gap-3 rounded-lg bg-stone-50 p-3 sm:grid-cols-[1fr_.6fr_2fr_auto] dark:bg-stone-900"
+              key={index}
+            >
+              <TextField
+                label="Nombre"
+                value={branch.name}
+                onChange={(value) =>
+                  update(
+                    "branches",
+                    form.branches.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, name: value } : item,
+                    ),
+                  )
+                }
+              />
+              <TextField
+                label="Código"
+                value={branch.code}
+                onChange={(value) =>
+                  update(
+                    "branches",
+                    form.branches.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, code: value } : item,
+                    ),
+                  )
+                }
+              />
+              <TextField
+                label="Dirección"
+                value={branch.address}
+                onChange={(value) =>
+                  update(
+                    "branches",
+                    form.branches.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, address: value } : item,
+                    ),
+                  )
+                }
+              />
+              <Button
+                aria-label={`Eliminar sucursal ${index + 1}`}
+                className="self-end"
+                onClick={() =>
+                  update(
+                    "branches",
+                    form.branches.filter((_, itemIndex) => itemIndex !== index),
+                  )
+                }
+                size="icon"
+                variant="ghost"
+              >
+                <Minus size={16} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
-function LegalStep({ officerCount, setOfficerCount }: { officerCount: number; setOfficerCount: (value: number) => void }) {
-  return <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><Field label="Fecha de constitución" type="date" /><Field label="Capital social / estructura patrimonial" placeholder="Ej. Bs. 100.000; 60% / 40%" /><Field label="Comisario" placeholder="Nombre o firma" /><Field label="Vencimiento del comisario" type="date" /><Field label="Próxima asamblea ordinaria" type="date" /><Field label="Fecha tope de renovación relevante" type="date" /></div><div className="rounded-xl border border-stone-200 p-4 dark:border-stone-800"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold">Cargos y responsables</p><p className="mt-1 text-xs text-stone-500">No se imponen nombres: registra exactamente los cargos definidos por la compañía.</p></div><Button onClick={() => setOfficerCount(officerCount + 1)} size="sm" type="button" variant="outline"><Plus size={15} /> Añadir cargo</Button></div><div className="mt-4 space-y-3">{Array.from({ length: officerCount }, (_, index) => <div className="grid gap-3 rounded-lg bg-stone-50 p-3 sm:grid-cols-[1fr_1fr_auto] dark:bg-stone-900" key={index}><Field label="Cargo" placeholder="Ej. Director general" /><Field label="Nombre completo" placeholder="Nombre y apellido" />{officerCount > 1 && <Button aria-label={`Eliminar cargo ${index + 1}`} className="self-end" onClick={() => setOfficerCount(officerCount - 1)} size="icon" type="button" variant="ghost"><Minus size={16} /></Button>}</div>)}</div></div><div className="rounded-xl border border-dashed border-[#a8c6b5] bg-[#f4faf6] p-4 dark:border-emerald-900 dark:bg-emerald-950/20"><p className="flex items-center gap-2 text-sm font-semibold text-[#14352d] dark:text-emerald-200"><FileText size={17} /> Expediente corporativo</p><p className="mt-1 text-sm text-stone-600 dark:text-stone-300">El acta constitutiva, las actas de asamblea y los nombramientos se cargarán en <strong>Documentos corporativos</strong>, donde cada archivo tendrá responsable, vigencia y alerta de renovación.</p></div></div>;
+function LegalStep({
+  form,
+  update,
+}: {
+  form: CompanyFormData;
+  update: Update;
+}) {
+  const addOfficer = () =>
+    update("officers", [
+      ...form.officers,
+      { position: "", fullName: "", termStartsAt: "", termEndsAt: "" },
+    ]);
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <DateField
+          label="Fecha de constitución"
+          value={form.incorporationDate}
+          onChange={(value) => update("incorporationDate", value)}
+        />
+        <TextField
+          label="Registro mercantil"
+          value={form.commercialRegistry}
+          onChange={(value) => update("commercialRegistry", value)}
+        />
+        <TextField
+          label="Folio"
+          value={form.registryFolio}
+          onChange={(value) => update("registryFolio", value)}
+        />
+        <TextField
+          label="Documento / tomo"
+          value={form.registryDocument}
+          onChange={(value) => update("registryDocument", value)}
+        />
+        <TextField
+          label="Capital social vigente"
+          value={form.shareCapital}
+          onChange={(value) => update("shareCapital", value)}
+        />
+      </div>
+      <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold">Junta directiva</p>
+            <p className="mt-1 text-xs text-stone-500">
+              Registra cargos, personas y vigencia según el documento legal.
+            </p>
+          </div>
+          <Button onClick={addOfficer} size="sm" variant="outline">
+            <Plus size={15} /> Añadir cargo
+          </Button>
+        </div>
+        <div className="mt-4 space-y-3">
+          {form.officers.map((officer, index) => (
+            <div
+              className="grid gap-3 rounded-lg bg-stone-50 p-3 md:grid-cols-[1fr_1fr_.8fr_.8fr_auto] dark:bg-stone-900"
+              key={index}
+            >
+              <TextField
+                label="Cargo"
+                value={officer.position}
+                onChange={(value) =>
+                  update(
+                    "officers",
+                    form.officers.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, position: value } : item,
+                    ),
+                  )
+                }
+              />
+              <TextField
+                label="Nombre completo"
+                value={officer.fullName}
+                onChange={(value) =>
+                  update(
+                    "officers",
+                    form.officers.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, fullName: value } : item,
+                    ),
+                  )
+                }
+              />
+              <DateField
+                label="Desde"
+                value={officer.termStartsAt}
+                onChange={(value) =>
+                  update(
+                    "officers",
+                    form.officers.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, termStartsAt: value }
+                        : item,
+                    ),
+                  )
+                }
+              />
+              <DateField
+                label="Hasta"
+                value={officer.termEndsAt}
+                onChange={(value) =>
+                  update(
+                    "officers",
+                    form.officers.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? { ...item, termEndsAt: value }
+                        : item,
+                    ),
+                  )
+                }
+              />
+              <Button
+                aria-label={`Eliminar cargo ${index + 1}`}
+                className="self-end"
+                onClick={() =>
+                  update(
+                    "officers",
+                    form.officers.filter((_, itemIndex) => itemIndex !== index),
+                  )
+                }
+                size="icon"
+                variant="ghost"
+              >
+                <Minus size={16} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
-function ServiceStep({ special }: { special: boolean }) { return <div className="space-y-5"><SelectField label="Plan activo" options={["Esencial — obligaciones básicas", "Tributario — calendario y declaraciones", "Integral — contabilidad y acompañamiento"]} />{special && <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900 dark:bg-violet-950/25"><p className="text-sm font-semibold text-violet-950 dark:text-violet-100">Obligaciones creadas por quincena</p><div className="mt-3 flex flex-wrap gap-2">{["IVA", "Retenciones de IVA", "IGTF"].map((item) => <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-violet-700 shadow-sm dark:bg-violet-950 dark:text-violet-200" key={item}>{item} · Quincenal</span>)}</div><p className="mt-3 text-xs leading-5 text-stone-500">Las fechas se completarán desde Configuración de la firma → Impuestos → Calendario anual SPE.</p></div>}<div><p className="text-sm font-medium">Obligaciones y servicios a controlar</p><p className="mt-1 text-sm text-stone-500 dark:text-stone-400">Esta es una selección inicial. Las reglas y fechas tope se tomarán del catálogo de la firma, sin asumir normas automáticamente.</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{obligations.map((obligation, index) => <label className="flex items-center gap-3 rounded-xl border border-stone-200 p-3 text-sm dark:border-stone-800" key={obligation}><input className="size-4 accent-[#14352d]" defaultChecked={index < 4 || special && ["IVA", "Retenciones de IVA", "IGTF"].includes(obligation)} type="checkbox" /> {obligation}</label>)}</div></div></div>; }
+function ServiceStep({
+  form,
+  offerings,
+  update,
+}: {
+  form: CompanyFormData;
+  offerings: CompanyOfferingOption[];
+  update: Update;
+}) {
+  const firmTaxOfferings = offerings.filter(
+    (offering) =>
+      offering.kind === "TAX" &&
+      offeringAppliesToCompany(offering, form.taxpayerType),
+  );
+  const firmServiceOfferings = offerings.filter(
+    ({ kind }) => kind === "SERVICE",
+  );
+  const toggle = (key: "taxOfferingKeys" | "serviceOfferingKeys", id: string) =>
+    update(
+      key,
+      form[key].includes(id)
+        ? form[key].filter((value) => value !== id)
+        : [...form[key], id],
+    );
+  return (
+    <div className="space-y-6">
+      <SelectField
+        label="Plan activo"
+        value={form.servicePlan}
+        onChange={(value) => update("servicePlan", value)}
+        options={["Esencial", "Tributario", "Integral"]}
+      />
+      <OfferingGrid
+        items={firmTaxOfferings}
+        selected={form.taxOfferingKeys}
+        title="Obligaciones tributarias"
+        onToggle={(id) => toggle("taxOfferingKeys", id)}
+      />
+      <OfferingGrid
+        items={firmServiceOfferings}
+        selected={form.serviceOfferingKeys}
+        title="Servicios"
+        onToggle={(id) => toggle("serviceOfferingKeys", id)}
+      />
+      {form.taxOfferingKeys.includes("municipal") && (
+        <MunicipalActivities form={form} update={update} />
+      )}
+      {form.taxOfferingKeys.includes("inces") && (
+        <section className="rounded-xl border border-stone-200 p-4 dark:border-stone-800">
+          <p className="font-semibold">Datos particulares de INCES</p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="N.º de RNCP"
+              value={form.incesRncp}
+              onChange={(value) => update("incesRncp", value)}
+            />
+            <TextField
+              label="Representante legal"
+              value={form.legalRepresentativeName}
+              onChange={(value) => update("legalRepresentativeName", value)}
+            />
+            <TextField
+              label="Cédula del representante"
+              value={form.legalRepresentativeDocument}
+              onChange={(value) => update("legalRepresentativeDocument", value)}
+            />
+            <TextField
+              label="Teléfono"
+              value={form.legalRepresentativePhone}
+              onChange={(value) => update("legalRepresentativePhone", value)}
+            />
+            <TextField
+              label="Correo"
+              type="email"
+              value={form.legalRepresentativeEmail}
+              onChange={(value) => update("legalRepresentativeEmail", value)}
+            />
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
 
-function AccessStep({ clientPortal, restrictedAccess, setClientPortal, setRestrictedAccess }: { clientPortal: boolean; restrictedAccess: boolean; setClientPortal: (value: boolean) => void; setRestrictedAccess: (value: boolean) => void }) { return <div className="space-y-4"><p className="text-sm text-stone-600 dark:text-stone-300">Marca las opciones que deben habilitarse para esta empresa. No son alternativas excluyentes.</p><label className={`block cursor-pointer rounded-xl border p-4 transition ${clientPortal ? "border-sky-400 bg-sky-50 dark:border-sky-700 dark:bg-sky-950/30" : "border-stone-200 dark:border-stone-800"}`}><div className="flex items-start gap-3"><input checked={clientPortal} className="mt-1 size-4 accent-[#14352d]" onChange={(event) => setClientPortal(event.target.checked)} type="checkbox" /><div className="grid size-9 shrink-0 place-items-center rounded-lg bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300"><UsersRound size={18} /></div><div><h3 className="font-semibold">Habilitar portal del cliente</h3><p className="mt-1 text-sm text-stone-600 dark:text-stone-300">Al crear la empresa se enviará una invitación segura al contacto principal. Luego podrás agregar otros usuarios y permisos.</p></div></div></label><label className={`block cursor-pointer rounded-xl border p-4 transition ${restrictedAccess ? "border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30" : "border-stone-200 dark:border-stone-800"}`}><div className="flex items-start gap-3"><input checked={restrictedAccess} className="mt-1 size-4 accent-[#14352d]" onChange={(event) => setRestrictedAccess(event.target.checked)} type="checkbox" /><div className="grid size-9 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200"><LockKeyhole size={18} /></div><div><h3 className="font-semibold">Gestionar accesos tributarios restringidos</h3><p className="mt-1 text-sm text-stone-600 dark:text-stone-300">Después de crear la empresa, personas autorizadas podrán registrar credenciales y certificados en un módulo cifrado, por rol y con auditoría.</p></div></div></label></div>; }
+function MunicipalActivities({
+  form,
+  update,
+}: {
+  form: CompanyFormData;
+  update: Update;
+}) {
+  const add = () =>
+    update("municipalActivities", [
+      ...form.municipalActivities,
+      {
+        branchName: "",
+        jurisdiction: "",
+        economicActivity: "",
+        rate: "",
+        effectiveFrom: "",
+        source: "",
+      },
+    ]);
+  const change = (
+    index: number,
+    key: keyof CompanyFormData["municipalActivities"][number],
+    value: string,
+  ) =>
+    update(
+      "municipalActivities",
+      form.municipalActivities.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item,
+      ),
+    );
+  return (
+    <section className="rounded-xl border border-sky-200 bg-sky-50/50 p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-semibold">Factores municipales por actividad</p>
+          <p className="mt-1 text-xs text-stone-600">
+            Cada factor exige jurisdicción, vigencia y fuente verificable.
+          </p>
+        </div>
+        <Button onClick={add} size="sm" variant="outline">
+          <Plus size={15} /> Añadir factor
+        </Button>
+      </div>
+      <div className="mt-4 space-y-3">
+        {form.municipalActivities.map((item, index) => (
+          <div
+            className="grid gap-3 rounded-lg bg-white p-3 md:grid-cols-3"
+            key={index}
+          >
+            <TextField
+              label="Sucursal"
+              value={item.branchName}
+              onChange={(value) => change(index, "branchName", value)}
+            />
+            <TextField
+              label="Jurisdicción"
+              value={item.jurisdiction}
+              onChange={(value) => change(index, "jurisdiction", value)}
+            />
+            <TextField
+              label="Actividad económica"
+              value={item.economicActivity}
+              onChange={(value) => change(index, "economicActivity", value)}
+            />
+            <TextField
+              label="Factor (%)"
+              value={item.rate}
+              onChange={(value) => change(index, "rate", value)}
+            />
+            <DateField
+              label="Aplicar desde"
+              value={item.effectiveFrom}
+              onChange={(value) => change(index, "effectiveFrom", value)}
+            />
+            <TextField
+              label="Ordenanza o fuente"
+              value={item.source}
+              onChange={(value) => change(index, "source", value)}
+            />
+            <Button
+              className="md:col-start-3"
+              onClick={() =>
+                update(
+                  "municipalActivities",
+                  form.municipalActivities.filter(
+                    (_, itemIndex) => itemIndex !== index,
+                  ),
+                )
+              }
+              variant="ghost"
+            >
+              <Minus size={15} /> Eliminar factor
+            </Button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
-function Field({ label, placeholder, type = "text" }: { label: string; placeholder?: string; type?: string }) { return <label className="text-sm font-medium">{label}{type === "date" ? <DatePicker className="mt-1.5" placeholder={placeholder ?? "Seleccionar fecha"} /> : <Input className="field mt-1.5" placeholder={placeholder} type={type} />}</label>; }
-function SelectField({ label, options }: { label: string; options: string[] }) { return <label className="text-sm font-medium">{label}<SimpleSelect className="field mt-1.5" defaultValue=""><option disabled value="">Selecciona una opción</option>{options.map((option) => <option key={option}>{option}</option>)}</SimpleSelect></label>; }
+function AccessStep({
+  form,
+  update,
+}: {
+  form: CompanyFormData;
+  update: Update;
+}) {
+  return (
+    <div className="space-y-4">
+      <ToggleCard
+        active={form.clientPortalEnabled}
+        icon={UsersRound}
+        title="Habilitar portal del cliente"
+        text="Deja preparada la empresa para asignar usuarios cliente; no envía invitaciones automáticamente."
+        onChange={(value) => update("clientPortalEnabled", value)}
+      />
+      <ToggleCard
+        active={form.restrictedTaxAccessEnabled}
+        icon={LockKeyhole}
+        title="Gestionar accesos tributarios restringidos"
+        text="Habilita el futuro módulo cifrado y auditado de credenciales, sin guardar claves en esta ficha."
+        onChange={(value) => update("restrictedTaxAccessEnabled", value)}
+      />
+    </div>
+  );
+}
+
+function OfferingGrid({
+  items,
+  onToggle,
+  selected,
+  title,
+}: {
+  items: CompanyOfferingOption[];
+  onToggle: (id: string) => void;
+  selected: string[];
+  title: string;
+}) {
+  return (
+    <section>
+      <p className="text-sm font-semibold">{title}</p>
+      <p className="mt-1 text-xs text-stone-500">
+        Solo aparecen opciones habilitadas por la firma; la empresa hereda sus
+        reglas, fuente y vigencia.
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {items.length ? (
+          items.map((item) => (
+            <button
+              aria-pressed={selected.includes(item.id)}
+              className={`flex items-start gap-3 rounded-xl border p-3 text-left ${selected.includes(item.id) ? "border-emerald-300 bg-emerald-50/70" : "border-stone-200"}`}
+              key={item.id}
+              onClick={() => onToggle(item.id)}
+              type="button"
+            >
+              <span
+                className={`mt-0.5 grid size-5 place-items-center rounded border ${selected.includes(item.id) ? "bg-[#14352d] text-white" : "border-stone-300"}`}
+              >
+                {selected.includes(item.id) && <Check size={13} />}
+              </span>
+              <span>
+                <b className="block text-sm">{item.name}</b>
+                <span className="text-xs text-stone-500">
+                  {item.organism} · {item.cadence}
+                </span>
+              </span>
+            </button>
+          ))
+        ) : (
+          <p className="rounded-lg border border-dashed p-3 text-sm text-stone-500 sm:col-span-2">
+            No hay opciones habilitadas en la configuración de la firma.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+function ToggleCard({
+  active,
+  icon: Icon,
+  onChange,
+  text,
+  title,
+}: {
+  active: boolean;
+  icon: typeof UsersRound;
+  onChange: (value: boolean) => void;
+  text: string;
+  title: string;
+}) {
+  return (
+    <label
+      className={`block cursor-pointer rounded-xl border p-4 ${active ? "border-emerald-400 bg-emerald-50" : "border-stone-200"}`}
+    >
+      <div className="flex items-start gap-3">
+        <input
+          checked={active}
+          className="mt-1 size-4 accent-[#14352d]"
+          onChange={(event) => onChange(event.target.checked)}
+          type="checkbox"
+        />
+        <Icon className="text-[#14352d]" size={20} />
+        <div>
+          <h3 className="font-semibold">{title}</h3>
+          <p className="mt-1 text-sm text-stone-600">{text}</p>
+        </div>
+      </div>
+    </label>
+  );
+}
+function TextField({
+  label,
+  onChange,
+  placeholder,
+  required,
+  type = "text",
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  type?: string;
+  value: string;
+}) {
+  return (
+    <label className="text-sm font-medium">
+      {label}
+      {required && <span className="text-rose-600"> *</span>}
+      <Input
+        className="field mt-1.5"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        required={required}
+        type={type}
+        value={value}
+      />
+    </label>
+  );
+}
+function DateField({
+  label,
+  onChange,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="text-sm font-medium">
+      {label}
+      <DatePicker className="mt-1.5" onValueChange={onChange} value={value} />
+    </label>
+  );
+}
+function SelectField({
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  options: string[];
+  value: string;
+}) {
+  return (
+    <label className="text-sm font-medium">
+      {label}
+      <SimpleSelect
+        className="field mt-1.5"
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        <option value="">Selecciona una opción</option>
+        {options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </SimpleSelect>
+    </label>
+  );
+}

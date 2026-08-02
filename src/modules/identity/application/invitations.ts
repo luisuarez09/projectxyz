@@ -1,10 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { getPrisma } from "@/infrastructure/database/prisma";
-import { createSmtpMailDelivery } from "@/infrastructure/mail/smtp-mail-delivery";
 import { invitationEmail } from "@/modules/identity/application/identity-mail-templates";
 import type { AuthContext } from "@/modules/shared/application/context";
 import { withAuthTransaction } from "@/infrastructure/database/auth-transaction";
+import { getEnabledFirmMailDelivery } from "@/modules/firm/application/enabled-mail-delivery";
 
 const INVITATION_HEADER = "x-proyectoxyz-invitation";
 
@@ -79,7 +79,10 @@ export async function completeInvitation(token: string): Promise<boolean> {
 
   return getPrisma().$transaction(async (transaction) => {
     await transaction.$executeRaw`SELECT set_config('app.invitation_token_hash', ${tokenHash}, true)`;
-    const invitation = await transaction.invitation.findUnique({ where: { tokenHash } });
+    const invitation = await transaction.invitation.findUnique({
+      where: { tokenHash },
+      include: { companyAccess: { select: { companyId: true } } },
+    });
     if (!invitation || invitation.status !== "PENDING" || invitation.expiresAt <= new Date()) {
       return false;
     }
@@ -105,18 +108,33 @@ export async function completeInvitation(token: string): Promise<boolean> {
         firmId: invitation.firmId,
         displayName: invitation.name,
         profileType: invitation.profileType,
+        position: invitation.position,
+        profession: invitation.profession,
       },
     });
-    await transaction.roleAssignment.create({
-      data: {
-        firmId: invitation.firmId,
-        userId: user.id,
-        roleId: invitation.roleId,
-        scope: invitation.scope,
-        companyId: invitation.companyId,
-        branchId: invitation.branchId,
-      },
-    });
+    const companyIds = invitation.companyAccess.map(({ companyId }) => companyId);
+    if (invitation.scope === "COMPANY" && companyIds.length > 0) {
+      await transaction.roleAssignment.createMany({
+        data: companyIds.map((companyId) => ({
+          firmId: invitation.firmId,
+          userId: user.id,
+          roleId: invitation.roleId,
+          scope: "COMPANY" as const,
+          companyId,
+        })),
+      });
+    } else {
+      await transaction.roleAssignment.create({
+        data: {
+          firmId: invitation.firmId,
+          userId: user.id,
+          roleId: invitation.roleId,
+          scope: invitation.scope,
+          companyId: invitation.companyId,
+          branchId: invitation.branchId,
+        },
+      });
+    }
     await transaction.invitation.update({
       where: { id: invitation.id },
       data: {
@@ -133,7 +151,7 @@ export async function completeInvitation(token: string): Promise<boolean> {
         eventType: "identity.invitation.accepted",
         entityType: "invitation",
         entityId: invitation.id,
-        metadata: { scope: invitation.scope },
+        metadata: { scope: invitation.scope, companyCount: companyIds.length },
       },
     });
 
@@ -146,12 +164,15 @@ export async function createInvitation(input: {
   appUrl: string;
   email: string;
   name: string;
+  position?: string;
+  profession?: string;
   roleId: string;
   profileType: "STAFF" | "CLIENT";
   scope: "FIRM" | "COMPANY" | "BRANCH";
   companyId?: string;
+  companyIds?: string[];
   branchId?: string;
-}): Promise<{ invitationId: string }> {
+}): Promise<{ invitationId: string; delivery: "SMTP" | "MANUAL_LINK"; invitationUrl?: string }> {
   if (!input.auth.firmScope || !input.auth.permissionKeys.includes("team.invite")) {
     throw new Error("No tienes permiso para invitar usuarios.");
   }
@@ -165,15 +186,18 @@ export async function createInvitation(input: {
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
   const invitation = await withAuthTransaction(input.auth, async (transaction) => {
+    const companyIds = [...new Set(input.companyIds ?? (input.companyId ? [input.companyId] : []))];
     const created = await transaction.invitation.create({
       data: {
         firmId: input.auth.firmId,
         email,
         name: input.name.trim(),
+        position: input.position?.trim(),
+        profession: input.profession?.trim(),
         roleId: input.roleId,
         profileType: input.profileType,
         scope: input.scope,
-        companyId: input.companyId,
+        companyId: companyIds[0],
         branchId: input.branchId,
         tokenHash,
         expiresAt,
@@ -181,6 +205,11 @@ export async function createInvitation(input: {
       },
       include: { firm: { select: { legalName: true } } },
     });
+    if (companyIds.length > 0) {
+      await transaction.invitationCompanyAccess.createMany({
+        data: companyIds.map((companyId) => ({ invitationId: created.id, companyId })),
+      });
+    }
     await transaction.auditEvent.create({
       data: {
         firmId: input.auth.firmId,
@@ -189,7 +218,7 @@ export async function createInvitation(input: {
         eventType: "identity.invitation.created",
         entityType: "invitation",
         entityId: created.id,
-        metadata: { scope: input.scope },
+        metadata: { scope: input.scope, companyCount: companyIds.length },
       },
     });
     return created;
@@ -197,12 +226,46 @@ export async function createInvitation(input: {
 
   const url = new URL("/invitacion", input.appUrl);
   url.searchParams.set("token", token);
-  await createSmtpMailDelivery().send(invitationEmail({
-    to: email,
-    name: input.name.trim(),
-    firmName: invitation.firm.legalName,
-    url: url.toString(),
-  }));
+  const delivery = await getEnabledFirmMailDelivery(input.auth);
+  if (delivery) {
+    try {
+      await delivery.send(invitationEmail({
+        to: email,
+        name: input.name.trim(),
+        firmName: invitation.firm.legalName,
+        url: url.toString(),
+      }));
+      await markInvitationDelivery(input.auth, invitation.id, "SMTP");
+      return { invitationId: invitation.id, delivery: "SMTP" };
+    } catch {
+      // The authenticated administrator receives a one-time link as a safe fallback.
+    }
+  }
 
-  return { invitationId: invitation.id };
+  await markInvitationDelivery(input.auth, invitation.id, "MANUAL_LINK");
+  return { invitationId: invitation.id, delivery: "MANUAL_LINK", invitationUrl: url.toString() };
+}
+
+async function markInvitationDelivery(
+  auth: AuthContext,
+  invitationId: string,
+  method: "SMTP" | "MANUAL_LINK",
+) {
+  await withAuthTransaction(auth, async (transaction) => {
+    await transaction.invitation.update({
+      where: { id: invitationId },
+      data: { lastDeliveryMethod: method, lastDeliveredAt: new Date() },
+    });
+    await transaction.auditEvent.create({
+      data: {
+        firmId: auth.firmId,
+        actorUserId: auth.userId,
+        requestId: randomUUID(),
+        eventType: method === "SMTP" ? "identity.invitation.sent" : "identity.invitation.link_issued",
+        entityType: "invitation",
+        entityId: invitationId,
+        metadata: { delivery: method },
+      },
+    });
+  });
 }

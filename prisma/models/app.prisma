@@ -20,6 +20,13 @@ enum CompanyStatus {
   @@schema("app")
 }
 
+enum CompanyOfferingKind {
+  TAX
+  SERVICE
+
+  @@schema("app")
+}
+
 enum AssignmentScope {
   FIRM
   COMPANY
@@ -47,65 +54,277 @@ enum StoredObjectStatus {
   @@schema("app")
 }
 
+enum MailProvider {
+  MAILRELAY
+  CUSTOM_SMTP
+
+  @@schema("app")
+}
+
+enum MailConnectionStatus {
+  NOT_TESTED
+  VERIFIED
+  FAILED
+
+  @@schema("app")
+}
+
+enum FirmEntityType {
+  NATURAL_PERSON
+  LEGAL_ENTITY
+
+  @@schema("app")
+}
+
+enum InvitationDeliveryMethod {
+  MANUAL_LINK
+  SMTP
+
+  @@schema("app")
+}
+
+enum FiscalCalendarTaxpayerCondition {
+  SPECIAL_TAXPAYER
+  ORDINARY
+  ALL
+
+  @@schema("app")
+}
+
 /// Tenant anchor retained even while the product launches with one firm.
 model Firm {
-  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  legalName       String           @map("legal_name")
-  tradeName       String?          @map("trade_name")
-  rif             String?          @unique
-  email           String?
-  phone           String?
-  fiscalAddress   String?          @map("fiscal_address")
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version         Int              @default(1)
-  profiles        UserProfile[]
-  clients         FirmClient[]
-  companies       Company[]
-  roles           Role[]
-  assignments     RoleAssignment[]
-  invitations     Invitation[]
-  storedObjects   StoredObject[]
-  documents       Document[]
+  id                 String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  entityType         FirmEntityType    @default(LEGAL_ENTITY) @map("entity_type")
+  legalName          String            @map("legal_name")
+  tradeName          String?           @map("trade_name")
+  rif                String?           @unique
+  email              String?
+  phone              String?
+  fiscalAddress      String?           @map("fiscal_address")
+  pdfHeader          String?           @map("pdf_header")
+  pdfFooter          String?           @map("pdf_footer")
+  logoStoredObjectId String?           @unique @map("logo_stored_object_id") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version            Int               @default(1)
+  profiles           UserProfile[]
+  clients            FirmClient[]
+  companies          Company[]
+  roles              Role[]
+  assignments        RoleAssignment[]
+  invitations        Invitation[]
+  storedObjects      StoredObject[]
+  documents          Document[]
+  mailSettings       FirmMailSettings?
+  offerings          FirmOffering[]
+  taxRates           TaxRate[]
+  fiscalCalendars    FiscalCalendar[]
+  logoStoredObject   StoredObject?     @relation("FirmLogo", fields: [logoStoredObjectId], references: [id], onDelete: Restrict)
 
   @@map("firms")
   @@schema("app")
 }
 
+model FirmMailSettings {
+  id                     String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId                 String               @unique @map("firm_id") @db.Uuid
+  enabled                Boolean              @default(false)
+  provider               MailProvider         @default(MAILRELAY)
+  senderDomain           String?              @map("sender_domain")
+  smtpHost               String?              @map("smtp_host")
+  smtpPort               Int                  @default(587) @map("smtp_port")
+  smtpSecure             Boolean              @default(false) @map("smtp_secure")
+  smtpRequireTls         Boolean              @default(true) @map("smtp_require_tls")
+  smtpUser               String?              @map("smtp_user")
+  smtpPasswordCiphertext Bytes?               @map("smtp_password_ciphertext")
+  smtpPasswordIv         Bytes?               @map("smtp_password_iv")
+  smtpPasswordAuthTag    Bytes?               @map("smtp_password_auth_tag")
+  smtpPasswordKeyVersion String?              @map("smtp_password_key_version")
+  fromAddress            String?              @map("from_address")
+  fromName               String               @default("proyectoxyz") @map("from_name")
+  replyTo                String?              @map("reply_to")
+  connectionStatus       MailConnectionStatus @default(NOT_TESTED) @map("connection_status")
+  lastVerifiedAt         DateTime?            @map("last_verified_at") @db.Timestamptz(6)
+  lastConnectionError    String?              @map("last_connection_error")
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                Int                  @default(1)
+  firm                   Firm                 @relation(fields: [firmId], references: [id], onDelete: Restrict)
+
+  @@map("firm_mail_settings")
+  @@schema("app")
+}
+
+model FirmOffering {
+  id                  String                          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId              String                          @map("firm_id") @db.Uuid
+  key                 String
+  kind                CompanyOfferingKind
+  taxpayerCondition   FiscalCalendarTaxpayerCondition @default(ALL) @map("taxpayer_condition")
+  name                String
+  organism            String
+  frequency           String
+  speFrequency        String?                         @map("spe_frequency")
+  deadlineMode        String                          @map("deadline_mode")
+  deadlineDayCount    Int                             @default(0) @map("deadline_day_count")
+  deadlineDayType     String                          @map("deadline_day_type")
+  deadlineBase        String                          @map("deadline_base")
+  templateKey         String?                         @map("template_key")
+  source              String?
+  effectiveFrom       DateTime?                       @map("effective_from") @db.Date
+  effectiveTo         DateTime?                       @map("effective_to") @db.Date
+  active              Boolean                         @default(false)
+  createdAt           DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version             Int                             @default(1)
+  firm                Firm                            @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  taxRates            TaxRate[]
+  calendarMatrixLinks FiscalCalendarMatrixOffering[]
+
+  @@unique([firmId, key])
+  @@index([firmId, kind, active])
+  @@map("firm_offerings")
+  @@schema("app")
+}
+
+model TaxRate {
+  id            String       @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId        String       @map("firm_id") @db.Uuid
+  offeringId    String       @map("offering_id") @db.Uuid
+  name          String
+  rate          Decimal      @db.Decimal(8, 4)
+  effectiveFrom DateTime?    @map("effective_from") @db.Date
+  effectiveTo   DateTime?    @map("effective_to") @db.Date
+  source        String?
+  active        Boolean      @default(false)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version       Int          @default(1)
+  firm          Firm         @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  offering      FirmOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  @@index([firmId, offeringId, effectiveFrom])
+  @@map("tax_rates")
+  @@schema("app")
+}
+
+model FiscalCalendar {
+  id                String                          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId            String                          @map("firm_id") @db.Uuid
+  key               String
+  name              String
+  year              Int
+  taxpayerCondition FiscalCalendarTaxpayerCondition @map("taxpayer_condition")
+  effectiveFrom     DateTime                        @map("effective_from") @db.Date
+  effectiveTo       DateTime                        @map("effective_to") @db.Date
+  sourceGazette     String?                         @map("source_gazette")
+  sourcePublishedAt DateTime?                       @map("source_published_at") @db.Date
+  sourceProvision   String?                         @map("source_provision")
+  sourceIssuedAt    DateTime?                       @map("source_issued_at") @db.Date
+  sourceNote        String?                         @map("source_note")
+  active            Boolean                         @default(false)
+  createdAt         DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version           Int                             @default(1)
+  firm              Firm                            @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  matrices          FiscalCalendarMatrix[]
+
+  @@unique([firmId, key])
+  @@index([firmId, taxpayerCondition, effectiveFrom, effectiveTo])
+  @@map("fiscal_calendars")
+  @@schema("app")
+}
+
+model FiscalCalendarMatrix {
+  id            String                         @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  calendarId    String                         @map("calendar_id") @db.Uuid
+  key           String
+  groupKey      String                         @map("group_key")
+  label         String
+  shortLabel    String                         @map("short_label")
+  cadence       String
+  periodLabel   String                         @map("period_label")
+  note          String?
+  ordinal       Int                            @default(0)
+  createdAt     DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  calendar      FiscalCalendar                 @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  offeringLinks FiscalCalendarMatrixOffering[]
+  dates         FiscalCalendarDate[]
+
+  @@unique([calendarId, key])
+  @@index([calendarId, groupKey, ordinal])
+  @@map("fiscal_calendar_matrices")
+  @@schema("app")
+}
+
+model FiscalCalendarMatrixOffering {
+  matrixId   String               @map("matrix_id") @db.Uuid
+  offeringId String               @map("offering_id") @db.Uuid
+  matrix     FiscalCalendarMatrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+  offering   FirmOffering         @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+
+  @@id([matrixId, offeringId])
+  @@index([offeringId])
+  @@map("fiscal_calendar_matrix_offerings")
+  @@schema("app")
+}
+
+model FiscalCalendarDate {
+  id           String               @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  matrixId     String               @map("matrix_id") @db.Uuid
+  rifCriterion String               @map("rif_criterion")
+  periodKey    String               @map("period_key")
+  dueDate      DateTime             @map("due_date") @db.Date
+  createdAt    DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  matrix       FiscalCalendarMatrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+
+  @@unique([matrixId, rifCriterion, periodKey])
+  @@index([matrixId, dueDate])
+  @@map("fiscal_calendar_dates")
+  @@schema("app")
+}
+
 /// Application-owned data associated with a Better Auth identity.
 model UserProfile {
-  id          String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  userId      String          @unique @map("user_id") @db.Uuid
-  firmId      String          @map("firm_id") @db.Uuid
-  displayName String          @map("display_name")
-  profileType UserProfileType @default(STAFF) @map("profile_type")
-  position    String?
-  profession  String?
-  active      Boolean         @default(true)
-  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version     Int             @default(1)
-  user        User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  firm        Firm            @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  id                   String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId               String          @unique @map("user_id") @db.Uuid
+  firmId               String          @map("firm_id") @db.Uuid
+  displayName          String          @map("display_name")
+  profileType          UserProfileType @default(STAFF) @map("profile_type")
+  position             String?
+  profession           String?
+  active               Boolean         @default(true)
+  retiredAt            DateTime?       @map("retired_at") @db.Timestamptz(6)
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version              Int             @default(1)
+  activeCompanyId      String?         @map("active_company_id") @db.Uuid
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  firm                 Firm            @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  activeCompany        Company?        @relation("ActiveCompany", fields: [activeCompanyId], references: [id], onDelete: SetNull)
+  responsibleCompanies Company[]       @relation("CompanyResponsible")
 
   @@index([firmId])
+  @@index([activeCompanyId])
   @@map("user_profiles")
   @@schema("app")
 }
 
 model FirmClient {
-  id           String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId       String           @map("firm_id") @db.Uuid
-  legalName    String           @map("legal_name")
+  id           String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId       String              @map("firm_id") @db.Uuid
+  legalName    String              @map("legal_name")
   rif          String?
-  contactName  String?          @map("contact_name")
-  contactEmail String?          @map("contact_email")
-  contactPhone String?          @map("contact_phone")
-  status       FirmClientStatus @default(ACTIVE)
-  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version      Int              @default(1)
-  firm         Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  contactName  String?             @map("contact_name")
+  contactEmail String?             @map("contact_email")
+  contactPhone String?             @map("contact_phone")
+  status       FirmClientStatus    @default(ACTIVE)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version      Int                 @default(1)
+  firm         Firm                @relation(fields: [firmId], references: [id], onDelete: Restrict)
   companies    FirmClientCompany[]
 
   @@unique([firmId, rif])
@@ -115,34 +334,104 @@ model FirmClient {
 }
 
 model Company {
-  id              String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId          String        @map("firm_id") @db.Uuid
-  legalName       String        @map("legal_name")
-  tradeName       String?       @map("trade_name")
-  rif             String
-  normalizedRif   String        @map("normalized_rif")
-  activity        String?
-  taxpayerType    String?       @map("taxpayer_type")
-  fiscalAddress   String?       @map("fiscal_address")
-  contactName     String?       @map("contact_name")
-  contactEmail    String?       @map("contact_email")
-  contactPhone    String?       @map("contact_phone")
-  status          CompanyStatus @default(ACTIVE)
-  archivedAt      DateTime?     @map("archived_at") @db.Timestamptz(6)
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version         Int           @default(1)
-  firm            Firm          @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  clients         FirmClientCompany[]
-  branches        Branch[]
-  roleAssignments RoleAssignment[]
-  invitations     Invitation[]
-  storedObjects   StoredObject[]
-  documents       Document[]
+  id                          String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId                      String                     @map("firm_id") @db.Uuid
+  legalName                   String                     @map("legal_name")
+  tradeName                   String?                    @map("trade_name")
+  rif                         String
+  normalizedRif               String                     @map("normalized_rif")
+  activity                    String?
+  taxpayerType                String?                    @map("taxpayer_type")
+  fiscalAddress               String?                    @map("fiscal_address")
+  contactName                 String?                    @map("contact_name")
+  contactEmail                String?                    @map("contact_email")
+  contactPhone                String?                    @map("contact_phone")
+  responsibleProfileId        String?                    @map("responsible_profile_id") @db.Uuid
+  servicePlan                 String?                    @map("service_plan")
+  ivssEmployerNumber          String?                    @map("ivss_employer_number")
+  faovPayrollNumber           String?                    @map("faov_payroll_number")
+  incorporationDate           DateTime?                  @map("incorporation_date") @db.Date
+  commercialRegistry          String?                    @map("commercial_registry")
+  registryFolio               String?                    @map("registry_folio")
+  registryDocument            String?                    @map("registry_document")
+  shareCapital                String?                    @map("share_capital")
+  incesRncp                   String?                    @map("inces_rncp")
+  legalRepresentativeName     String?                    @map("legal_representative_name")
+  legalRepresentativeDocument String?                    @map("legal_representative_document")
+  legalRepresentativePhone    String?                    @map("legal_representative_phone")
+  legalRepresentativeEmail    String?                    @map("legal_representative_email")
+  clientPortalEnabled         Boolean                    @default(false) @map("client_portal_enabled")
+  restrictedTaxAccessEnabled  Boolean                    @default(false) @map("restricted_tax_access_enabled")
+  status                      CompanyStatus              @default(ACTIVE)
+  archivedAt                  DateTime?                  @map("archived_at") @db.Timestamptz(6)
+  createdAt                   DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                     Int                        @default(1)
+  firm                        Firm                       @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  responsibleProfile          UserProfile?               @relation("CompanyResponsible", fields: [responsibleProfileId], references: [id], onDelete: SetNull)
+  activeForProfiles           UserProfile[]              @relation("ActiveCompany")
+  clients                     FirmClientCompany[]
+  branches                    Branch[]
+  roleAssignments             RoleAssignment[]
+  invitations                 Invitation[]
+  invitationAccess            InvitationCompanyAccess[]
+  storedObjects               StoredObject[]
+  documents                   Document[]
+  officers                    CompanyOfficer[]
+  offerings                   CompanyOffering[]
+  municipalActivities         CompanyMunicipalActivity[]
 
   @@unique([firmId, normalizedRif])
   @@index([firmId, status])
+  @@index([responsibleProfileId])
   @@map("companies")
+  @@schema("app")
+}
+
+model CompanyOfficer {
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  companyId    String    @map("company_id") @db.Uuid
+  position     String
+  fullName     String    @map("full_name")
+  termStartsAt DateTime? @map("term_starts_at") @db.Date
+  termEndsAt   DateTime? @map("term_ends_at") @db.Date
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("company_officers")
+  @@schema("app")
+}
+
+model CompanyOffering {
+  companyId   String              @map("company_id") @db.Uuid
+  kind        CompanyOfferingKind
+  offeringKey String              @map("offering_key")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, kind, offeringKey])
+  @@index([companyId, kind])
+  @@map("company_offerings")
+  @@schema("app")
+}
+
+model CompanyMunicipalActivity {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  companyId        String   @map("company_id") @db.Uuid
+  branchName       String?  @map("branch_name")
+  jurisdiction     String
+  economicActivity String   @map("economic_activity")
+  rate             Decimal  @db.Decimal(10, 4)
+  effectiveFrom    DateTime @map("effective_from") @db.Date
+  source           String
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, effectiveFrom])
+  @@map("company_municipal_activities")
   @@schema("app")
 }
 
@@ -189,20 +478,20 @@ model Permission {
 }
 
 model Role {
-  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId          String           @map("firm_id") @db.Uuid
-  name            String
-  slug            String
-  description     String?
-  isSystem        Boolean          @default(false) @map("is_system")
-  archivedAt      DateTime?        @map("archived_at") @db.Timestamptz(6)
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version         Int              @default(1)
-  firm            Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  permissions     RolePermission[]
-  assignments     RoleAssignment[]
-  invitations     Invitation[]
+  id          String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId      String           @map("firm_id") @db.Uuid
+  name        String
+  slug        String
+  description String?
+  isSystem    Boolean          @default(false) @map("is_system")
+  archivedAt  DateTime?        @map("archived_at") @db.Timestamptz(6)
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version     Int              @default(1)
+  firm        Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  permissions RolePermission[]
+  assignments RoleAssignment[]
+  invitations Invitation[]
 
   @@unique([firmId, slug])
   @@index([firmId, archivedAt])
@@ -248,29 +537,34 @@ model RoleAssignment {
 }
 
 model Invitation {
-  id              String           @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId          String           @map("firm_id") @db.Uuid
-  email           String
-  name            String
-  profileType     UserProfileType  @default(STAFF) @map("profile_type")
-  roleId          String           @map("role_id") @db.Uuid
-  scope           AssignmentScope
-  companyId       String?          @map("company_id") @db.Uuid
-  branchId        String?          @map("branch_id") @db.Uuid
-  tokenHash       String           @unique @map("token_hash")
-  status          InvitationStatus @default(PENDING)
-  expiresAt       DateTime         @map("expires_at") @db.Timestamptz(6)
-  invitedByUserId String           @map("invited_by_user_id") @db.Uuid
-  acceptedByUserId String?         @map("accepted_by_user_id") @db.Uuid
-  acceptedAt      DateTime?        @map("accepted_at") @db.Timestamptz(6)
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  firm            Firm             @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  role            Role             @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  company         Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  invitedBy       User             @relation("InvitationSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
-  acceptedBy      User?            @relation("InvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
+  id                 String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId             String                    @map("firm_id") @db.Uuid
+  email              String
+  name               String
+  profileType        UserProfileType           @default(STAFF) @map("profile_type")
+  roleId             String                    @map("role_id") @db.Uuid
+  scope              AssignmentScope
+  companyId          String?                   @map("company_id") @db.Uuid
+  branchId           String?                   @map("branch_id") @db.Uuid
+  tokenHash          String                    @unique @map("token_hash")
+  status             InvitationStatus          @default(PENDING)
+  expiresAt          DateTime                  @map("expires_at") @db.Timestamptz(6)
+  invitedByUserId    String?                   @map("invited_by_user_id") @db.Uuid
+  acceptedByUserId   String?                   @map("accepted_by_user_id") @db.Uuid
+  acceptedAt         DateTime?                 @map("accepted_at") @db.Timestamptz(6)
+  lastDeliveryMethod InvitationDeliveryMethod? @map("last_delivery_method")
+  lastDeliveredAt    DateTime?                 @map("last_delivered_at") @db.Timestamptz(6)
+  position           String?
+  profession         String?
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  firm               Firm                      @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  role               Role                      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  company            Company?                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch             Branch?                   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  invitedBy          User?                     @relation("InvitationSender", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+  acceptedBy         User?                     @relation("InvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: Restrict)
+  companyAccess      InvitationCompanyAccess[]
 
   @@index([firmId, email, status])
   @@index([expiresAt, status])
@@ -278,28 +572,42 @@ model Invitation {
   @@schema("app")
 }
 
+model InvitationCompanyAccess {
+  invitationId String     @map("invitation_id") @db.Uuid
+  companyId    String     @map("company_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  invitation   Invitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@id([invitationId, companyId])
+  @@index([companyId])
+  @@map("invitation_company_access")
+  @@schema("app")
+}
+
 model StoredObject {
-  id              String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId          String             @map("firm_id") @db.Uuid
-  companyId       String?            @map("company_id") @db.Uuid
-  uploadedByUserId String            @map("uploaded_by_user_id") @db.Uuid
-  bucket          String
-  objectKey       String             @map("object_key")
-  originalName    String             @map("original_name")
-  declaredMime    String             @map("declared_mime")
-  detectedMime    String?            @map("detected_mime")
-  sizeBytes       BigInt             @map("size_bytes")
-  checksumSha256  String             @map("checksum_sha256")
-  status          StoredObjectStatus @default(PENDING)
-  rejectionReason String?            @map("rejection_reason")
-  scannedAt       DateTime?          @map("scanned_at") @db.Timestamptz(6)
-  availableAt     DateTime?          @map("available_at") @db.Timestamptz(6)
-  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
-  firm            Firm               @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  company         Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  uploadedBy      User               @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  id               String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId           String             @map("firm_id") @db.Uuid
+  companyId        String?            @map("company_id") @db.Uuid
+  uploadedByUserId String             @map("uploaded_by_user_id") @db.Uuid
+  bucket           String
+  objectKey        String             @map("object_key")
+  originalName     String             @map("original_name")
+  declaredMime     String             @map("declared_mime")
+  detectedMime     String?            @map("detected_mime")
+  sizeBytes        BigInt             @map("size_bytes")
+  checksumSha256   String             @map("checksum_sha256")
+  status           StoredObjectStatus @default(PENDING)
+  rejectionReason  String?            @map("rejection_reason")
+  scannedAt        DateTime?          @map("scanned_at") @db.Timestamptz(6)
+  availableAt      DateTime?          @map("available_at") @db.Timestamptz(6)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  firm             Firm               @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company          Company?           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  uploadedBy       User               @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
   documentVersions DocumentVersion[]
+  firmLogo         Firm?              @relation("FirmLogo")
 
   @@unique([bucket, objectKey])
   @@index([firmId, companyId, status])

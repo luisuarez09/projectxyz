@@ -16,6 +16,7 @@ test-results/
 
 # Local files
 *.log
+.bootstrap/
 .DS_Store
 Thumbs.db
 

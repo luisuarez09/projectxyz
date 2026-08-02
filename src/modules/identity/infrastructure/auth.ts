@@ -19,6 +19,13 @@ function createAuth() {
   return betterAuth({
     appName: "proyectoxyz",
     baseURL: config.BETTER_AUTH_URL,
+    trustedOrigins: [
+      config.BETTER_AUTH_URL,
+      ...(process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ],
     secret: config.BETTER_AUTH_SECRET,
     database: prismaAdapter(prisma, {
       provider: "postgresql",

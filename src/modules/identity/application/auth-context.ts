@@ -18,7 +18,7 @@ export async function resolveAuthContext(
 
     const profile = await transaction.userProfile.findUnique({
       where: { userId: session.user.id },
-      select: { firmId: true, active: true },
+      select: { firmId: true, active: true, activeCompanyId: true },
     });
     if (!profile?.active) {
       throw new AuthorizationError("El perfil no está activo.");
@@ -64,9 +64,10 @@ export async function resolveAuthContext(
     const permissionKeys = [...new Set(assignments.flatMap(({ role }) =>
       role.permissions.map(({ permissionKey }) => permissionKey),
     ))];
-    const activeCompanyId = requestedCompanyId && allowedCompanyIds.includes(requestedCompanyId)
-      ? requestedCompanyId
-      : allowedCompanyIds[0] ?? null;
+    const preferredCompanyId = requestedCompanyId === undefined ? profile.activeCompanyId : requestedCompanyId;
+    const activeCompanyId = preferredCompanyId && allowedCompanyIds.includes(preferredCompanyId)
+      ? preferredCompanyId
+      : null;
 
     return {
       userId: session.user.id,

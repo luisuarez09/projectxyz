@@ -10,6 +10,7 @@ import { UserMenu } from "@/components/user-menu";
 
 const settingsSections = [
   { label: "General", href: "/configuracion/general", id: "general" },
+  { label: "Correo", href: "/configuracion/correo", id: "correo" },
   { label: "Planes", href: "/configuracion/planes", id: "planes" },
   { label: "Impuestos", href: "/configuracion/impuestos", id: "impuestos" },
   { label: "Servicios", href: "/configuracion/servicios", id: "servicios" },

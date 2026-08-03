@@ -12,6 +12,7 @@ import {
   Info,
   Layers3,
   LoaderCircle,
+  PanelsTopLeft,
   Printer,
   Search,
   Tags,
@@ -20,13 +21,14 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
 import { useCompanyContext } from "@/components/company-context";
+import { FiscalBoardBuilder } from "@/components/fiscal-board-builder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SimpleSelect } from "@/components/ui/simple-select";
 
-type Tab = "consolidado" | "portada";
+type Tab = "consolidado" | "cartelera" | "portada";
 type ArchiveDocument = {
   id: string;
   name: string;
@@ -35,6 +37,8 @@ type ArchiveDocument = {
   sizeBytes: number;
   origin: string;
   status: "AVAILABLE" | "QUARANTINED";
+  fiscalBoard: boolean;
+  documentOrder: number;
 };
 type DocumentGroup = {
   id: string;
@@ -43,12 +47,14 @@ type DocumentGroup = {
   kind: "TAX" | "SERVICE";
   documents: ArchiveDocument[];
   archiveOrder: number;
+  expectedBoardDocuments: string[];
 };
 type ArchiveResponse = {
   period: { key: string; label: string };
   company: { id: string; legalName: string; rif: string };
   companies: { id: string; legalName: string; rif: string }[];
   groups: DocumentGroup[];
+  fiscalBoardGroups: DocumentGroup[];
   archivePaperSize: "LETTER" | "A4" | "LEGAL_OFFICIO";
   archivePaperLabel: string;
 };
@@ -440,6 +446,12 @@ export function ArchiveBuilder() {
           onClick={() => setTab("consolidado")}
         />
         <TabButton
+          active={tab === "cartelera"}
+          icon={PanelsTopLeft}
+          label="Cartelera"
+          onClick={() => setTab("cartelera")}
+        />
+        <TabButton
           active={tab === "portada"}
           icon={Tags}
           label="Portada y etiqueta"
@@ -600,6 +612,10 @@ export function ArchiveBuilder() {
             />
           </div>
         </>
+      )}
+
+      {tab === "cartelera" && (
+        <FiscalBoardBuilder data={data} loading={loading} period={period} />
       )}
 
       {tab === "portada" && (

@@ -11,38 +11,57 @@ import {
   AttachmentTitle,
   AttachmentTrigger,
 } from "@/components/ui/attachment"
+import { cn } from "@/lib/utils"
 
 type AttachmentInputProps = Omit<React.ComponentProps<"input">, "type"> & {
   label?: string
   description?: string
   fileName?: string
+  enableDrop?: boolean
 }
 
 export const AttachmentInput = React.forwardRef<HTMLInputElement, AttachmentInputProps>(
   function AttachmentInput(
-    {
+    allProps,
+    forwardedRef
+  ) {
+    const {
       accept,
       "aria-label": ariaLabel,
       className: _legacyClassName,
       description,
       disabled,
+      enableDrop = true,
       fileName: controlledFileName,
       label = "Adjuntar archivo",
       onChange,
-      ...props
-    },
-    forwardedRef
-  ) {
+      ...inputProps
+    } = allProps
     const inputRef = React.useRef<HTMLInputElement>(null)
     const [internalFileName, setInternalFileName] = React.useState("")
-    const fileName = controlledFileName ?? internalFileName
+    const [dragging, setDragging] = React.useState(false)
+    const fileName = "fileName" in allProps
+      ? controlledFileName ?? ""
+      : internalFileName
 
     React.useImperativeHandle(forwardedRef, () => inputRef.current as HTMLInputElement)
+
+    const selectFile = (file?: File) => {
+      if (!file || !inputRef.current) return
+      const transfer = new DataTransfer()
+      transfer.items.add(file)
+      inputRef.current.files = transfer.files
+      setInternalFileName(file.name)
+      onChange?.({
+        target: inputRef.current,
+        currentTarget: inputRef.current,
+      } as React.ChangeEvent<HTMLInputElement>)
+    }
 
     return (
       <span className="block min-w-0">
         <input
-          {...props}
+          {...inputProps}
           accept={accept}
           className="sr-only"
           disabled={disabled}
@@ -53,14 +72,47 @@ export const AttachmentInput = React.forwardRef<HTMLInputElement, AttachmentInpu
           ref={inputRef}
           type="file"
         />
-        <Attachment className="w-full min-w-0" state={fileName ? "done" : "idle"}>
+        <Attachment
+          className={cn(
+            "w-full min-w-0",
+            dragging && "border-[#14352d] bg-[#e7f0e9]/60 dark:bg-emerald-950/40"
+          )}
+          onDragEnter={(event) => {
+            if (!enableDrop || disabled) return
+            event.preventDefault()
+            event.stopPropagation()
+            setDragging(true)
+          }}
+          onDragLeave={(event) => {
+            if (!enableDrop || disabled) return
+            event.preventDefault()
+            event.stopPropagation()
+            setDragging(false)
+          }}
+          onDragOver={(event) => {
+            if (!enableDrop || disabled) return
+            event.preventDefault()
+            event.stopPropagation()
+            event.dataTransfer.dropEffect = "copy"
+          }}
+          onDrop={(event) => {
+            if (!enableDrop || disabled) return
+            event.preventDefault()
+            event.stopPropagation()
+            setDragging(false)
+            selectFile(event.dataTransfer.files?.[0])
+          }}
+          state={fileName ? "done" : "idle"}
+        >
           <AttachmentMedia>
             {fileName ? <Paperclip /> : <FileUp />}
           </AttachmentMedia>
           <AttachmentContent>
             <AttachmentTitle>{fileName || label}</AttachmentTitle>
             <AttachmentDescription>
-              {fileName ? "Archivo preparado para adjuntar" : description ?? acceptedDescription(accept)}
+              {fileName
+                ? "Archivo preparado para adjuntar"
+                : `${description ?? acceptedDescription(accept)}${enableDrop ? " · Arrastra o selecciona un archivo" : ""}`}
             </AttachmentDescription>
           </AttachmentContent>
           <AttachmentTrigger

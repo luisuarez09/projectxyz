@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useCompanyContext } from "@/components/company-context";
 import { AttachmentInput } from "@/components/ui/attachment-input";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +51,18 @@ function currentPeriod() {
   }).format(new Date());
 }
 
+function caracasToday() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Caracas",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (kind: Intl.DateTimeFormatPartTypes) =>
+    parts.find(({ type }) => type === kind)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
 function formatDate(value: string) {
   if (!value) return "Sin fecha calculada";
   return new Intl.DateTimeFormat("es-VE", {
@@ -76,6 +89,7 @@ export function MunicipalServicesRegister() {
   const [open, setOpen] = useState(false);
   const [serviceKey, setServiceKey] = useState("");
   const [amount, setAmount] = useState("");
+  const [registeredAt, setRegisteredAt] = useState(caracasToday);
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -144,12 +158,13 @@ export function MunicipalServicesRegister() {
 
   function resetForm() {
     setAmount("");
+    setRegisteredAt(caracasToday());
     setFile(null);
     setError(null);
   }
 
   async function registerService() {
-    if (!selectedCase || !amount || !file || saving) return;
+    if (!selectedCase || !amount || !file || !registeredAt || saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -171,9 +186,9 @@ export function MunicipalServicesRegister() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           version: selectedCase.version,
-          status: "PENDING",
+          status: "SUBMITTED",
           activityMode: null,
-          filedAt: "",
+          filedAt: registeredAt,
           amount,
         }),
       });
@@ -300,11 +315,12 @@ export function MunicipalServicesRegister() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <Table className="min-w-[900px] w-full text-left text-sm">
+            <Table className="min-w-[1050px] w-full text-left text-sm">
               <TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70">
                 <TableRow>
                   <TableHead className="px-5 py-3">Servicio / período</TableHead>
                   <TableHead className="px-3 py-3">Documento</TableHead>
+                  <TableHead className="px-3 py-3">Registrada</TableHead>
                   <TableHead className="px-3 py-3">Fecha tope</TableHead>
                   <TableHead className="px-3 py-3 text-right">Monto</TableHead>
                   <TableHead className="px-3 py-3">Soporte</TableHead>
@@ -324,6 +340,9 @@ export function MunicipalServicesRegister() {
                       </TableCell>
                       <TableCell className="px-3 py-4">
                         {invoice?.originalName ?? "Documento adjunto"}
+                      </TableCell>
+                      <TableCell className="px-3 py-4">
+                        {item.filedAt ? formatDate(item.filedAt) : "—"}
                       </TableCell>
                       <TableCell className="px-3 py-4">
                         <p className="font-medium">{formatDate(item.dueDate)}</p>
@@ -351,7 +370,11 @@ export function MunicipalServicesRegister() {
                               : "bg-amber-50 text-amber-700"
                           }`}
                         >
-                          {isPaid(item) ? "Pagado" : "Pendiente de pago"}
+                          {isPaid(item)
+                            ? "Pagado"
+                            : item.status === "SUBMITTED"
+                              ? "Declarada · pendiente de pago"
+                              : "Pendiente de pago"}
                         </span>
                       </TableCell>
                     </TableRow>
@@ -417,6 +440,14 @@ export function MunicipalServicesRegister() {
                   {selectedService?.organism ?? "—"}
                 </div>
               </div>
+              <label className="text-sm font-medium">
+                Fecha registrada
+                <DatePicker
+                  className="field mt-1.5"
+                  onChange={(event) => setRegisteredAt(event.target.value)}
+                  value={registeredAt}
+                />
+              </label>
               <label className="text-sm font-medium sm:col-span-2">
                 Monto indicado en el documento
                 <Input
@@ -460,7 +491,7 @@ export function MunicipalServicesRegister() {
               </button>
               <button
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#14352d] px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!selectedCase || !amount || !file || saving}
+                disabled={!selectedCase || !amount || !file || !registeredAt || saving}
                 onClick={() => void registerService()}
                 type="button"
               >

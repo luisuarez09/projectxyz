@@ -37,6 +37,28 @@ const archivePdfSchema = z.object({
   includeIndex: z.boolean().default(true),
   purpose: z.enum(["preview", "download"]).default("download"),
 });
+const fiscalBoardPdfSchema = z.object({
+  companyId: z.uuid(),
+  period: periodSchema,
+  evidenceIds: z.array(z.uuid()).min(1).max(80),
+  layout: z.enum(["ONE_PER_PAGE", "TWO_PER_PAGE"]).default("ONE_PER_PAGE"),
+  purpose: z.enum(["preview", "download"]).default("download"),
+});
+const boardEvidenceRequirementsSchema = z
+  .array(
+    z.object({
+      kind: z.enum([
+        "SOLVENCY",
+        "DECLARATION_RECEIPT",
+        "DECLARATION_FILE",
+        "PAYMENT_FORM",
+        "PAYMENT_RECEIPT",
+      ]),
+      required: z.boolean(),
+      fiscalBoard: z.boolean().default(false),
+    }),
+  )
+  .catch([]);
 
 const evidenceLabels = {
   SOLVENCY: "Solvencia",
@@ -100,7 +122,9 @@ export async function getArchivePeriod(
         offeringName: true,
         offeringKind: true,
         cadence: true,
-        offering: { select: { archiveOrder: true } },
+        offering: {
+          select: { archiveOrder: true, evidenceRequirements: true },
+        },
         evidences: {
           where: {
             storedObject: { status: { in: ["AVAILABLE", "QUARANTINED"] } },
@@ -128,6 +152,62 @@ export async function getArchivePeriod(
       ],
     });
     const company = companies.find((item) => item.id === companyId)!;
+    const serializeCase = (item: (typeof cases)[number]) => {
+      const requirements = boardEvidenceRequirementsSchema.parse(
+        item.offering.evidenceRequirements,
+      );
+      const requirementByKind = new Map(
+        requirements.map((requirement, index) => [
+          requirement.kind,
+          { ...requirement, order: index },
+        ]),
+      );
+      const documents = item.evidences
+        .map((evidence) => {
+          const requirement = requirementByKind.get(
+            evidence.kind as (typeof requirements)[number]["kind"],
+          );
+          return {
+            id: evidence.id,
+            name: evidenceLabels[evidence.kind],
+            fileName: evidence.storedObject.originalName,
+            mimeType: evidence.storedObject.declaredMime,
+            sizeBytes: Number(evidence.storedObject.sizeBytes),
+            status: evidence.storedObject.status as
+              | "AVAILABLE"
+              | "QUARANTINED",
+            origin:
+              item.offeringKind === "TAX"
+                ? "Expediente de declaración"
+                : "Calendario de servicios",
+            fiscalBoard:
+              item.offeringKind === "SERVICE" ||
+              Boolean(requirement?.fiscalBoard),
+            documentOrder: requirement?.order ?? 999,
+          };
+        })
+        .sort(
+          (left, right) =>
+            left.documentOrder - right.documentOrder ||
+            left.name.localeCompare(right.name, "es"),
+        );
+      const expectedBoardDocuments =
+        item.offeringKind === "TAX"
+          ? requirements
+              .filter(({ fiscalBoard }) => fiscalBoard)
+              .map(({ kind }) => evidenceLabels[kind])
+          : ["Factura", "Comprobante de pago"];
+      return {
+        id: item.id,
+        name: item.offeringName,
+        cadence: item.cadence,
+        kind: item.offeringKind,
+        archiveOrder: item.offering.archiveOrder,
+        expectedBoardDocuments,
+        documents,
+      };
+    };
+    const serializedCases = cases.map(serializeCase);
     return {
       period: { key: period, label: periodLabel(period) },
       company,
@@ -137,27 +217,11 @@ export async function getArchivePeriod(
         archivePaperSizes[
           firm.archivePaperSize as keyof typeof archivePaperSizes
         ]?.label ?? archivePaperSizes.LETTER.label,
-      groups: cases
-        .filter((item) => item.evidences.length > 0)
-        .map((item) => ({
-          id: item.id,
-          name: item.offeringName,
-          cadence: item.cadence,
-          kind: item.offeringKind,
-          archiveOrder: item.offering.archiveOrder,
-          documents: item.evidences.map((evidence) => ({
-            id: evidence.id,
-            name: evidenceLabels[evidence.kind],
-            fileName: evidence.storedObject.originalName,
-            mimeType: evidence.storedObject.declaredMime,
-            sizeBytes: Number(evidence.storedObject.sizeBytes),
-            status: evidence.storedObject.status as "AVAILABLE" | "QUARANTINED",
-            origin:
-              item.offeringKind === "TAX"
-                ? "Expediente de declaración"
-                : "Calendario de servicios",
-          })),
-        })),
+      groups: serializedCases.filter((item) => item.documents.length > 0),
+      fiscalBoardGroups: serializedCases.map((item) => ({
+        ...item,
+        documents: item.documents.filter(({ fiscalBoard }) => fiscalBoard),
+      })),
     };
   });
 }
@@ -171,6 +235,7 @@ type ArchiveSource = {
   objectKey: string;
   sizeBytes: number;
   archiveOrder: number;
+  documentOrder: number;
 };
 
 type LoadedSource = ArchiveSource & {
@@ -329,7 +394,9 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
           case: {
             select: {
               offeringName: true,
-              offering: { select: { archiveOrder: true } },
+              offering: {
+                select: { archiveOrder: true, evidenceRequirements: true },
+              },
             },
           },
           storedObject: {
@@ -350,6 +417,12 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
     const byId = new Map(evidences.map((evidence) => [evidence.id, evidence]));
     const sources = input.evidenceIds.map((id): ArchiveSource => {
       const evidence = byId.get(id)!;
+      const requirements = boardEvidenceRequirementsSchema.parse(
+        evidence.case.offering.evidenceRequirements,
+      );
+      const documentOrder = requirements.findIndex(
+        ({ kind }) => kind === evidence.kind,
+      );
       return {
         id,
         group: evidence.case.offeringName,
@@ -359,12 +432,14 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
         objectKey: evidence.storedObject.objectKey,
         sizeBytes: Number(evidence.storedObject.sizeBytes),
         archiveOrder: evidence.case.offering.archiveOrder,
+        documentOrder: documentOrder < 0 ? 999 : documentOrder,
       };
     });
     sources.sort(
       (left, right) =>
         left.archiveOrder - right.archiveOrder ||
-        left.group.localeCompare(right.group, "es"),
+        left.group.localeCompare(right.group, "es") ||
+        left.documentOrder - right.documentOrder,
     );
     if (
       sources.reduce((total, source) => total + source.sizeBytes, 0) >
@@ -645,6 +720,217 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
   return {
     bytes,
     fileName: `expediente-${snapshot.company.rif}-${input.period}.pdf`
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-"),
+  };
+}
+
+export async function generateFiscalBoardPdf(
+  auth: AuthContext,
+  rawInput: unknown,
+) {
+  requirePermission(auth, permissions.calendarRead);
+  const input = fiscalBoardPdfSchema.parse(rawInput);
+  if (!auth.allowedCompanyIds.includes(input.companyId))
+    throw new AuthorizationError(
+      "No tienes acceso a los documentos de esta empresa.",
+    );
+
+  const snapshot = await withAuthTransaction(auth, async (transaction) => {
+    const [firm, company, evidences] = await Promise.all([
+      transaction.firm.findUniqueOrThrow({
+        where: { id: auth.firmId },
+        select: { legalName: true, tradeName: true, archivePaperSize: true },
+      }),
+      transaction.company.findFirstOrThrow({
+        where: { id: input.companyId, firmId: auth.firmId, status: "ACTIVE" },
+        select: { legalName: true, rif: true },
+      }),
+      transaction.complianceCaseEvidence.findMany({
+        where: {
+          id: { in: input.evidenceIds },
+          firmId: auth.firmId,
+          companyId: input.companyId,
+          case: { periodMonth: monthStart(input.period), suppressedAt: null },
+          storedObject: { status: "AVAILABLE" },
+        },
+        select: {
+          id: true,
+          kind: true,
+          case: {
+            select: {
+              offeringName: true,
+              offeringKind: true,
+              offering: {
+                select: { archiveOrder: true, evidenceRequirements: true },
+              },
+            },
+          },
+          storedObject: {
+            select: {
+              originalName: true,
+              declaredMime: true,
+              objectKey: true,
+              sizeBytes: true,
+            },
+          },
+        },
+      }),
+    ]);
+    if (evidences.length !== input.evidenceIds.length)
+      throw new Error(
+        "La selección contiene archivos no disponibles o ajenos al período.",
+      );
+
+    const byId = new Map(evidences.map((evidence) => [evidence.id, evidence]));
+    const sources = input.evidenceIds.map((id) => {
+      const evidence = byId.get(id)!;
+      const requirements = boardEvidenceRequirementsSchema.parse(
+        evidence.case.offering.evidenceRequirements,
+      );
+      const documentOrder = requirements.findIndex(
+        ({ kind }) => kind === evidence.kind,
+      );
+      const requirement = requirements[documentOrder];
+      const eligible =
+        evidence.case.offeringKind === "SERVICE" ||
+        Boolean(requirement?.fiscalBoard);
+      if (!eligible)
+        throw new Error(
+          `${evidenceLabels[evidence.kind]} de ${evidence.case.offeringName} no está configurado para la cartelera fiscal.`,
+        );
+      return {
+        id,
+        group: evidence.case.offeringName,
+        label: evidenceLabels[evidence.kind],
+        fileName: evidence.storedObject.originalName,
+        mimeType: evidence.storedObject.declaredMime,
+        objectKey: evidence.storedObject.objectKey,
+        sizeBytes: Number(evidence.storedObject.sizeBytes),
+        archiveOrder: evidence.case.offering.archiveOrder,
+        documentOrder: documentOrder < 0 ? 999 : documentOrder,
+      };
+    });
+    sources.sort(
+      (left, right) =>
+        left.archiveOrder - right.archiveOrder ||
+        left.group.localeCompare(right.group, "es") ||
+        left.documentOrder - right.documentOrder,
+    );
+    if (
+      sources.reduce((total, source) => total + source.sizeBytes, 0) >
+      150 * 1024 * 1024
+    )
+      throw new Error(
+        "La selección supera 150 MB. Genera la cartelera en varios lotes.",
+      );
+    return { firm, company, sources };
+  });
+
+  const loaded = await Promise.all(snapshot.sources.map(loadSource));
+  const paper =
+    archivePaperSizes[
+      snapshot.firm.archivePaperSize as keyof typeof archivePaperSizes
+    ] ?? archivePaperSizes.LETTER;
+  const twoPerPage = input.layout === "TWO_PER_PAGE";
+  const pageSize: [number, number] = twoPerPage
+    ? [paper.height, paper.width]
+    : [paper.width, paper.height];
+  const pdf = await PDFDocument.create();
+  let currentPage: PDFPage | null = null;
+  let slot = 0;
+
+  const addSheet = (
+    width: number,
+    height: number,
+    draw: (page: PDFPage, box: { x: number; y: number; width: number; height: number }) => void,
+  ) => {
+    if (!currentPage || !twoPerPage || slot === 0) {
+      currentPage = pdf.addPage(pageSize);
+      if (twoPerPage)
+        currentPage.drawLine({
+          start: { x: pageSize[0] / 2, y: 14 },
+          end: { x: pageSize[0] / 2, y: pageSize[1] - 14 },
+          thickness: 0.5,
+          color: rgb(0.82, 0.82, 0.8),
+        });
+    }
+    const margin = 18;
+    const gutter = twoPerPage ? 14 : 0;
+    const boxWidth = twoPerPage
+      ? (pageSize[0] - margin * 2 - gutter) / 2
+      : pageSize[0] - margin * 2;
+    const boxHeight = pageSize[1] - margin * 2;
+    const boxX = twoPerPage
+      ? margin + slot * (boxWidth + gutter)
+      : margin;
+    const scale = Math.min(boxWidth / width, boxHeight / height);
+    const fittedWidth = width * scale;
+    const fittedHeight = height * scale;
+    draw(currentPage, {
+      x: boxX + (boxWidth - fittedWidth) / 2,
+      y: margin + (boxHeight - fittedHeight) / 2,
+      width: fittedWidth,
+      height: fittedHeight,
+    });
+    slot = twoPerPage ? (slot + 1) % 2 : 0;
+  };
+
+  for (const source of loaded) {
+    if (source.sourcePdf) {
+      const embeddedPages = await pdf.embedPdf(
+        source.bytes,
+        source.sourcePdf.getPageIndices(),
+      );
+      embeddedPages.forEach((embeddedPage) =>
+        addSheet(embeddedPage.width, embeddedPage.height, (page, box) =>
+          page.drawPage(embeddedPage, box),
+        ),
+      );
+    } else {
+      const image =
+        source.mimeType === "image/png"
+          ? await pdf.embedPng(source.bytes)
+          : await pdf.embedJpg(source.bytes);
+      addSheet(image.width, image.height, (page, box) =>
+        page.drawImage(image, box),
+      );
+    }
+  }
+
+  const brand = snapshot.firm.tradeName || snapshot.firm.legalName;
+  pdf.setTitle(
+    `Cartelera fiscal - ${snapshot.company.legalName} - ${periodLabel(input.period)}`,
+  );
+  pdf.setAuthor(brand);
+  pdf.setSubject("Cartelera fiscal del período");
+  pdf.setCreator("proyectoxyz");
+  const bytes = await pdf.save();
+
+  if (input.purpose === "download")
+    await withAuthTransaction(auth, async (transaction) => {
+      await transaction.auditEvent.create({
+        data: {
+          firmId: auth.firmId,
+          actorUserId: auth.userId,
+          requestId: randomUUID(),
+          eventType: "archive.fiscal_board_pdf.generated",
+          entityType: "company",
+          entityId: input.companyId,
+          metadata: {
+            period: input.period,
+            evidenceIds: input.evidenceIds,
+            documentCount: input.evidenceIds.length,
+            pageCount: pdf.getPageCount(),
+            layout: input.layout,
+          },
+        },
+      });
+    });
+  return {
+    bytes,
+    fileName: `cartelera-fiscal-${snapshot.company.rif}-${input.period}.pdf`
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-zA-Z0-9._-]+/g, "-"),

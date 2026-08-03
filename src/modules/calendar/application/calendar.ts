@@ -46,6 +46,7 @@ const updateCaseSchema = z.object({
     .enum(["WITH_ACTIVITY", "WITHOUT_ACTIVITY"])
     .nullable(),
   filedAt: optionalDate,
+  paidAt: optionalDate.optional(),
   amount: z
     .string()
     .trim()
@@ -73,6 +74,7 @@ const evidenceRequirementSchema = z.object({
     "PAYMENT_RECEIPT",
   ]),
   required: z.boolean(),
+  fiscalBoard: z.boolean().default(false),
 });
 const evidenceRequirementsSchema = evidenceRequirementSchema.array().catch([]);
 const reconciliationSchema = z.object({
@@ -780,6 +782,45 @@ export async function getCalendarPeriod(
   });
 }
 
+export async function getPaymentCommitments(auth: AuthContext) {
+  requirePermission(auth, permissions.calendarRead);
+  if (!auth.activeCompanyId)
+    throw new AuthorizationError("Selecciona una empresa para consultar sus compromisos de pago.");
+  const companyId = auth.activeCompanyId;
+
+  return withAuthTransaction(auth, async (transaction) => {
+    const today = caracasToday();
+    const currentPeriod = today.toISOString().slice(0, 7);
+    await ensurePeriodCases(transaction, auth, currentPeriod);
+
+    const company = await transaction.company.findFirstOrThrow({
+      where: { id: companyId, firmId: auth.firmId },
+      select: { id: true, legalName: true, rif: true },
+    });
+    const cases = await transaction.complianceCase.findMany({
+      where: {
+        firmId: auth.firmId,
+        companyId,
+        suppressedAt: null,
+        amount: { not: null },
+        status: { not: "NOT_APPLICABLE" },
+      },
+      include: caseInclude,
+      orderBy: [
+        { paidAt: { sort: "asc", nulls: "first" } },
+        { dueDate: { sort: "asc", nulls: "last" } },
+        { periodMonth: "desc" },
+      ],
+    });
+
+    return {
+      company,
+      cases: cases.map(serializeCase),
+      canManage: auth.permissionKeys.includes(permissions.calendarManage),
+    };
+  });
+}
+
 function annualStatusHref(kind: AnnualStatusKind, templateKey: string | null) {
   if (kind === "SERVICE") return "/servicios";
   return templateKey ? `/declaraciones/${templateKey}` : "/declaraciones";
@@ -1014,7 +1055,9 @@ export async function updateCalendarCase(
         activityMode: input.activityMode,
         filedAt: input.filedAt ? new Date(`${input.filedAt}T00:00:00.000Z`) : null,
         paidAt: input.status === "PAID"
-          ? (existing.paidAt ?? caracasToday())
+          ? (input.paidAt
+              ? new Date(`${input.paidAt}T00:00:00.000Z`)
+              : (existing.paidAt ?? caracasToday()))
           : input.status === "CLOSED"
             ? existing.paidAt
             : null,

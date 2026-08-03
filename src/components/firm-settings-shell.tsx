@@ -12,6 +12,7 @@ const settingsSections = [
   { label: "General", href: "/configuracion/general", id: "general" },
   { label: "Correo", href: "/configuracion/correo", id: "correo" },
   { label: "Planes", href: "/configuracion/planes", id: "planes" },
+  { label: "Plan de cuentas", href: "/configuracion/plan-cuentas-base", id: "plan-cuentas-base" },
   { label: "Impuestos", href: "/configuracion/impuestos", id: "impuestos" },
   { label: "Servicios", href: "/configuracion/servicios", id: "servicios" },
   { label: "Tasas", href: "/configuracion/tasas-cambio", id: "tasas" },

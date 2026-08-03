@@ -153,44 +153,120 @@ enum ExchangeRateSyncStatus {
   @@schema("app")
 }
 
+enum ChartAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  COST
+  EXPENSE
+  MEMORANDUM
+
+  @@schema("app")
+}
+
+enum ChartAccountNature {
+  DEBIT
+  CREDIT
+
+  @@schema("app")
+}
+
+enum ChartAccountStatus {
+  ACTIVE
+  INACTIVE
+
+  @@schema("app")
+}
+
+enum CommercialPartyKind {
+  CUSTOMER
+  SUPPLIER
+
+  @@schema("app")
+}
+
+enum CommercialPartyStatus {
+  ACTIVE
+  ARCHIVED
+
+  @@schema("app")
+}
+
+enum CommercialDocumentType {
+  SALE
+  PURCHASE
+
+  @@schema("app")
+}
+
+enum CommercialDocumentStatus {
+  REGISTERED
+  VOIDED
+
+  @@schema("app")
+}
+
+enum CommercialVatCreditStatus {
+  PENDING
+  APPLIED
+  EXCLUDED
+
+  @@schema("app")
+}
+
+enum CommercialRetentionType {
+  IVA
+  ISLR
+
+  @@schema("app")
+}
+
 /// Tenant anchor retained even while the product launches with one firm.
 model Firm {
-  id                 String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  entityType         FirmEntityType           @default(LEGAL_ENTITY) @map("entity_type")
-  legalName          String                   @map("legal_name")
-  tradeName          String?                  @map("trade_name")
-  rif                String?                  @unique
-  email              String?
-  phone              String?
-  fiscalAddress      String?                  @map("fiscal_address")
-  pdfHeader          String?                  @map("pdf_header")
-  pdfFooter          String?                  @map("pdf_footer")
-  archivePaperSize   String                   @default("LETTER") @map("archive_paper_size")
-  exchangeRateSyncStart String                 @default("18:00") @map("exchange_rate_sync_start")
-  exchangeRateSyncEnd String                   @default("21:00") @map("exchange_rate_sync_end")
-  exchangeRateSyncInterval Int                 @default(30) @map("exchange_rate_sync_interval")
-  logoStoredObjectId String?                  @unique @map("logo_stored_object_id") @db.Uuid
-  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version            Int                      @default(1)
-  profiles           UserProfile[]
-  clients            FirmClient[]
-  companies          Company[]
-  roles              Role[]
-  assignments        RoleAssignment[]
-  invitations        Invitation[]
-  storedObjects      StoredObject[]
-  documents          Document[]
-  mailSettings       FirmMailSettings?
-  offerings          FirmOffering[]
-  taxRates           TaxRate[]
-  fiscalCalendars    FiscalCalendar[]
-  complianceCases    ComplianceCase[]
-  complianceEvidence ComplianceCaseEvidence[]
-  exchangeRates      ExchangeRate[]
-  exchangeRateSyncRuns ExchangeRateSyncRun[]
-  currencies         FirmCurrency[]
-  logoStoredObject   StoredObject?            @relation("FirmLogo", fields: [logoStoredObjectId], references: [id], onDelete: Restrict)
+  id                       String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  entityType               FirmEntityType           @default(LEGAL_ENTITY) @map("entity_type")
+  legalName                String                   @map("legal_name")
+  tradeName                String?                  @map("trade_name")
+  rif                      String?                  @unique
+  email                    String?
+  phone                    String?
+  fiscalAddress            String?                  @map("fiscal_address")
+  pdfHeader                String?                  @map("pdf_header")
+  pdfFooter                String?                  @map("pdf_footer")
+  archivePaperSize         String                   @default("LETTER") @map("archive_paper_size")
+  exchangeRateSyncStart    String                   @default("18:00") @map("exchange_rate_sync_start")
+  exchangeRateSyncEnd      String                   @default("21:00") @map("exchange_rate_sync_end")
+  exchangeRateSyncInterval Int                      @default(30) @map("exchange_rate_sync_interval")
+  logoStoredObjectId       String?                  @unique @map("logo_stored_object_id") @db.Uuid
+  createdAt                DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                  Int                      @default(1)
+  profiles                 UserProfile[]
+  clients                  FirmClient[]
+  companies                Company[]
+  roles                    Role[]
+  assignments              RoleAssignment[]
+  invitations              Invitation[]
+  storedObjects            StoredObject[]
+  documents                Document[]
+  mailSettings             FirmMailSettings?
+  offerings                FirmOffering[]
+  taxRates                 TaxRate[]
+  fiscalCalendars          FiscalCalendar[]
+  complianceCases          ComplianceCase[]
+  complianceEvidence       ComplianceCaseEvidence[]
+  exchangeRates            ExchangeRate[]
+  exchangeRateSyncRuns     ExchangeRateSyncRun[]
+  currencies               FirmCurrency[]
+  chartTemplate            FirmChartTemplate?
+  chartAccounts            CompanyChartAccount[]
+  accountingAssignments    CompanyAccountingAssignment[]
+  commercialSettings       CompanyCommercialSettings[]
+  commercialCounterparties CommercialCounterparty[]
+  commercialPartyRoles     CommercialPartyRole[]
+  commercialDocuments      CommercialDocument[]
+  logoStoredObject         StoredObject?            @relation("FirmLogo", fields: [logoStoredObjectId], references: [id], onDelete: Restrict)
 
   @@map("firms")
   @@schema("app")
@@ -227,33 +303,33 @@ model FirmMailSettings {
 }
 
 model FirmOffering {
-  id                  String                          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId              String                          @map("firm_id") @db.Uuid
-  key                 String
-  kind                CompanyOfferingKind
-  taxpayerCondition   FiscalCalendarTaxpayerCondition @default(ALL) @map("taxpayer_condition")
-  name                String
-  organism            String
-  frequency           String
-  speFrequency        String?                         @map("spe_frequency")
-  deadlineMode        String                          @map("deadline_mode")
-  deadlineDayCount    Int                             @default(0) @map("deadline_day_count")
-  deadlineDayType     String                          @map("deadline_day_type")
-  deadlineBase        String                          @map("deadline_base")
-  evidenceRequirements Json                           @default("[]") @map("evidence_requirements") @db.JsonB
-  templateKey         String?                         @map("template_key")
-  source              String?
-  effectiveFrom       DateTime?                       @map("effective_from") @db.Date
-  effectiveTo         DateTime?                       @map("effective_to") @db.Date
-  active              Boolean                         @default(false)
-  archiveOrder        Int                             @default(1000) @map("archive_order")
-  createdAt           DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version             Int                             @default(1)
-  firm                Firm                            @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  taxRates            TaxRate[]
-  calendarMatrixLinks FiscalCalendarMatrixOffering[]
-  complianceCases     ComplianceCase[]
+  id                   String                          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId               String                          @map("firm_id") @db.Uuid
+  key                  String
+  kind                 CompanyOfferingKind
+  taxpayerCondition    FiscalCalendarTaxpayerCondition @default(ALL) @map("taxpayer_condition")
+  name                 String
+  organism             String
+  frequency            String
+  speFrequency         String?                         @map("spe_frequency")
+  deadlineMode         String                          @map("deadline_mode")
+  deadlineDayCount     Int                             @default(0) @map("deadline_day_count")
+  deadlineDayType      String                          @map("deadline_day_type")
+  deadlineBase         String                          @map("deadline_base")
+  evidenceRequirements Json                            @default("[]") @map("evidence_requirements") @db.JsonB
+  templateKey          String?                         @map("template_key")
+  source               String?
+  effectiveFrom        DateTime?                       @map("effective_from") @db.Date
+  effectiveTo          DateTime?                       @map("effective_to") @db.Date
+  active               Boolean                         @default(false)
+  archiveOrder         Int                             @default(1000) @map("archive_order")
+  createdAt            DateTime                        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                        @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version              Int                             @default(1)
+  firm                 Firm                            @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  taxRates             TaxRate[]
+  calendarMatrixLinks  FiscalCalendarMatrixOffering[]
+  complianceCases      ComplianceCase[]
 
   @@unique([firmId, key])
   @@index([firmId, kind, active])
@@ -276,6 +352,7 @@ model TaxRate {
   version       Int          @default(1)
   firm          Firm         @relation(fields: [firmId], references: [id], onDelete: Restrict)
   offering      FirmOffering @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  commercialDocuments CommercialDocument[]
 
   @@index([firmId, offeringId, effectiveFrom])
   @@map("tax_rates")
@@ -285,26 +362,26 @@ model TaxRate {
 /// Versioned exchange rate. A partial database index guarantees one current
 /// value per firm, currency and effective date without deleting prior values.
 model ExchangeRate {
-  id               String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId           String                 @map("firm_id") @db.Uuid
-  currency         String
-  rate             Decimal                @db.Decimal(20, 8)
-  effectiveDate    DateTime               @map("effective_date") @db.Date
-  sourceKind       ExchangeRateSourceKind @map("source_kind")
-  sourceUrl        String?                @map("source_url")
-  sourceHash       String?                @map("source_hash")
+  id                String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId            String                 @map("firm_id") @db.Uuid
+  currency          String
+  rate              Decimal                @db.Decimal(20, 8)
+  effectiveDate     DateTime               @map("effective_date") @db.Date
+  sourceKind        ExchangeRateSourceKind @map("source_kind")
+  sourceUrl         String?                @map("source_url")
+  sourceHash        String?                @map("source_hash")
   sourcePublishedAt DateTime?              @map("source_published_at") @db.Timestamptz(6)
-  capturedAt       DateTime               @default(now()) @map("captured_at") @db.Timestamptz(6)
-  manualReason     String?                @map("manual_reason")
-  recordedByUserId String?                @map("recorded_by_user_id") @db.Uuid
-  supersededAt     DateTime?              @map("superseded_at") @db.Timestamptz(6)
-  supersededById   String?                @map("superseded_by_id") @db.Uuid
-  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  firm             Firm                   @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  firmCurrency     FirmCurrency           @relation(fields: [firmId, currency], references: [firmId, code], onDelete: Restrict)
-  recordedBy       User?                  @relation("ExchangeRateRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
-  supersededBy     ExchangeRate?          @relation("ExchangeRateSupersession", fields: [supersededById], references: [id], onDelete: Restrict)
-  supersedes       ExchangeRate[]         @relation("ExchangeRateSupersession")
+  capturedAt        DateTime               @default(now()) @map("captured_at") @db.Timestamptz(6)
+  manualReason      String?                @map("manual_reason")
+  recordedByUserId  String?                @map("recorded_by_user_id") @db.Uuid
+  supersededAt      DateTime?              @map("superseded_at") @db.Timestamptz(6)
+  supersededById    String?                @map("superseded_by_id") @db.Uuid
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  firm              Firm                   @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  firmCurrency      FirmCurrency           @relation(fields: [firmId, currency], references: [firmId, code], onDelete: Restrict)
+  recordedBy        User?                  @relation("ExchangeRateRecorder", fields: [recordedByUserId], references: [id], onDelete: Restrict)
+  supersededBy      ExchangeRate?          @relation("ExchangeRateSupersession", fields: [supersededById], references: [id], onDelete: Restrict)
+  supersedes        ExchangeRate[]         @relation("ExchangeRateSupersession")
 
   @@index([firmId, currency, effectiveDate])
   @@index([recordedByUserId])
@@ -318,7 +395,7 @@ model FirmCurrency {
   code             String
   name             String
   symbol           String?
-  source            FirmCurrencySource
+  source           FirmCurrencySource
   sourceName       String?            @map("source_name")
   sourceUrl        String?            @map("source_url")
   automaticEnabled Boolean            @default(false) @map("automatic_enabled")
@@ -336,19 +413,19 @@ model FirmCurrency {
 }
 
 model ExchangeRateSyncRun {
-  id                String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId            String                   @map("firm_id") @db.Uuid
+  id                String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId            String                  @map("firm_id") @db.Uuid
   trigger           ExchangeRateSyncTrigger
   status            ExchangeRateSyncStatus
-  scheduleKey       String?                  @map("schedule_key")
-  effectiveDate     DateTime?                @map("effective_date") @db.Date
-  ratesFound        Int                      @default(0) @map("rates_found")
-  errorMessage      String?                  @map("error_message")
-  initiatedByUserId String?                  @map("initiated_by_user_id") @db.Uuid
-  startedAt         DateTime                 @default(now()) @map("started_at") @db.Timestamptz(6)
-  completedAt       DateTime                 @default(now()) @map("completed_at") @db.Timestamptz(6)
-  firm              Firm                     @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  initiatedBy       User?                    @relation("ExchangeRateSyncInitiator", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
+  scheduleKey       String?                 @map("schedule_key")
+  effectiveDate     DateTime?               @map("effective_date") @db.Date
+  ratesFound        Int                     @default(0) @map("rates_found")
+  errorMessage      String?                 @map("error_message")
+  initiatedByUserId String?                 @map("initiated_by_user_id") @db.Uuid
+  startedAt         DateTime                @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt       DateTime                @default(now()) @map("completed_at") @db.Timestamptz(6)
+  firm              Firm                    @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  initiatedBy       User?                   @relation("ExchangeRateSyncInitiator", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
 
   @@unique([firmId, scheduleKey])
   @@index([firmId, startedAt])
@@ -532,11 +609,285 @@ model Company {
   municipalActivities         CompanyMunicipalActivity[]
   complianceCases             ComplianceCase[]
   complianceEvidence          ComplianceCaseEvidence[]
+  chartAccounts               CompanyChartAccount[]
+  accountingAssignments       CompanyAccountingAssignment[]
+  commercialSettings          CompanyCommercialSettings?
+  commercialCounterparties    CommercialCounterparty[]
+  commercialPartyRoles        CommercialPartyRole[]
+  commercialDocuments         CommercialDocument[]
 
   @@unique([firmId, normalizedRif])
   @@index([firmId, status])
   @@index([responsibleProfileId])
   @@map("companies")
+  @@schema("app")
+}
+
+model FirmChartTemplate {
+  id          String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId      String                     @unique @map("firm_id") @db.Uuid
+  name        String
+  description String?
+  sourceName  String?                    @map("source_name")
+  createdAt   DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version     Int                        @default(1)
+  firm        Firm                       @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  accounts    FirmChartTemplateAccount[]
+
+  @@map("firm_chart_templates")
+  @@schema("app")
+}
+
+model FirmChartTemplateAccount {
+  id               String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  templateId       String                @map("template_id") @db.Uuid
+  code             String
+  name             String
+  type             ChartAccountType
+  nature           ChartAccountNature
+  level            Int
+  parent           String
+  use              String
+  acceptsMovements Boolean               @default(true) @map("accepts_movements")
+  status           ChartAccountStatus    @default(ACTIVE)
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version          Int                   @default(1)
+  template         FirmChartTemplate     @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  companyAccounts  CompanyChartAccount[] @relation("TemplateAccountSource")
+
+  @@unique([templateId, code])
+  @@index([templateId, level, code])
+  @@map("firm_chart_template_accounts")
+  @@schema("app")
+}
+
+model CompanyChartAccount {
+  id                         String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId                     String                    @map("firm_id") @db.Uuid
+  companyId                  String                    @map("company_id") @db.Uuid
+  sourceTemplateAccountId    String?                   @map("source_template_account_id") @db.Uuid
+  code                       String
+  name                       String
+  type                       ChartAccountType
+  nature                     ChartAccountNature
+  level                      Int
+  parent                     String
+  use                        String
+  acceptsMovements           Boolean                   @default(true) @map("accepts_movements")
+  status                     ChartAccountStatus        @default(ACTIVE)
+  createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                    Int                       @default(1)
+  firm                       Firm                      @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company                    Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceTemplateAccount      FirmChartTemplateAccount? @relation("TemplateAccountSource", fields: [sourceTemplateAccountId], references: [id], onDelete: SetNull)
+  commercialPrimaryRoles     CommercialPartyRole[]     @relation("CommercialPrimaryAccount")
+  commercialCounterpartRoles CommercialPartyRole[]     @relation("CommercialCounterpartAccount")
+  accountingAssignments      CompanyAccountingAssignment[]
+  commercialEntries          CommercialAccountingEntry[]
+
+  @@unique([companyId, code])
+  @@index([firmId, companyId, level, code])
+  @@index([sourceTemplateAccountId])
+  @@map("company_chart_accounts")
+  @@schema("app")
+}
+
+model CompanyAccountingAssignment {
+  id        String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId    String              @map("firm_id") @db.Uuid
+  companyId String              @map("company_id") @db.Uuid
+  roleKey   String              @map("role_key")
+  accountId String              @map("account_id") @db.Uuid
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version   Int                 @default(1)
+  firm      Firm                @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account   CompanyChartAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, roleKey])
+  @@index([firmId, companyId])
+  @@index([accountId])
+  @@map("company_accounting_assignments")
+  @@schema("app")
+}
+
+model CompanyCommercialSettings {
+  id                     String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId                 String   @map("firm_id") @db.Uuid
+  companyId              String   @unique @map("company_id") @db.Uuid
+  salesInvoicePrefix     String   @default("F-") @map("sales_invoice_prefix")
+  nextSalesInvoiceNumber Int      @default(1) @map("next_sales_invoice_number")
+  salesInvoicePadding    Int      @default(6) @map("sales_invoice_padding")
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                Int      @default(1)
+  firm                   Firm     @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company                Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([firmId, companyId])
+  @@map("company_commercial_settings")
+  @@schema("app")
+}
+
+model CommercialCounterparty {
+  id             String                @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId         String                @map("firm_id") @db.Uuid
+  companyId      String                @map("company_id") @db.Uuid
+  legalName      String                @map("legal_name")
+  normalizedName String                @map("normalized_name")
+  rif            String
+  normalizedRif  String                @map("normalized_rif")
+  fiscalAddress  String?               @map("fiscal_address")
+  email          String?
+  phone          String?
+  status         CommercialPartyStatus @default(ACTIVE)
+  archivedAt     DateTime?             @map("archived_at") @db.Timestamptz(6)
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int                   @default(1)
+  firm           Firm                  @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company        Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  roles          CommercialPartyRole[]
+  documents      CommercialDocument[]
+
+  @@unique([companyId, normalizedRif])
+  @@index([firmId, companyId, status])
+  @@index([companyId, normalizedName])
+  @@map("commercial_counterparties")
+  @@schema("app")
+}
+
+model CommercialPartyRole {
+  id                   String                 @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId               String                 @map("firm_id") @db.Uuid
+  companyId            String                 @map("company_id") @db.Uuid
+  counterpartyId       String                 @map("counterparty_id") @db.Uuid
+  kind                 CommercialPartyKind
+  primaryAccountId     String?                @map("primary_account_id") @db.Uuid
+  counterpartAccountId String?                @map("counterpart_account_id") @db.Uuid
+  status               CommercialPartyStatus  @default(ACTIVE)
+  archivedAt           DateTime?              @map("archived_at") @db.Timestamptz(6)
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version              Int                    @default(1)
+  firm                 Firm                   @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company              Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  counterparty         CommercialCounterparty @relation(fields: [counterpartyId], references: [id], onDelete: Restrict)
+  primaryAccount       CompanyChartAccount?   @relation("CommercialPrimaryAccount", fields: [primaryAccountId], references: [id], onDelete: Restrict)
+  counterpartAccount   CompanyChartAccount?   @relation("CommercialCounterpartAccount", fields: [counterpartAccountId], references: [id], onDelete: Restrict)
+
+  @@unique([counterpartyId, kind])
+  @@index([firmId, companyId, kind, status])
+  @@index([primaryAccountId])
+  @@index([counterpartAccountId])
+  @@map("commercial_party_roles")
+  @@schema("app")
+}
+
+model CommercialDocument {
+  id             String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId         String                   @map("firm_id") @db.Uuid
+  companyId      String                   @map("company_id") @db.Uuid
+  counterpartyId String?                  @map("counterparty_id") @db.Uuid
+  type           CommercialDocumentType
+  documentNumber String                   @map("document_number")
+  normalizedDocumentNumber String         @map("normalized_document_number")
+  sequenceNumber Int?                     @map("sequence_number")
+  issueDate      DateTime                 @map("issue_date") @db.Date
+  impositionPeriod String                 @map("imposition_period") @db.VarChar(7)
+  currencyCode   String                   @map("currency_code") @db.VarChar(3)
+  taxableBase    Decimal                  @map("taxable_base") @db.Decimal(20, 6)
+  exemptAmount   Decimal                  @map("exempt_amount") @db.Decimal(20, 6)
+  nonTaxableAmount Decimal                @default(0) @map("non_taxable_amount") @db.Decimal(20, 6)
+  taxAmount      Decimal                  @map("tax_amount") @db.Decimal(20, 6)
+  totalAmount    Decimal                  @map("total_amount") @db.Decimal(20, 6)
+  vatRate        Decimal?                 @map("vat_rate") @db.Decimal(8, 4)
+  vatSource      String?                  @map("vat_source")
+  taxRateId      String?                  @map("tax_rate_id") @db.Uuid
+  vatCreditStatus CommercialVatCreditStatus? @map("vat_credit_status")
+  declaredAt      DateTime?                @map("declared_at") @db.Timestamptz(6)
+  invoiceAttachmentId String?             @unique @map("invoice_attachment_id") @db.Uuid
+  voidReason     String?                  @map("void_reason")
+  status         CommercialDocumentStatus @default(REGISTERED)
+  createdAt      DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int                      @default(1)
+  firm           Firm                     @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company        Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  counterparty   CommercialCounterparty?  @relation(fields: [counterpartyId], references: [id], onDelete: Restrict)
+  taxRate        TaxRate?                 @relation(fields: [taxRateId], references: [id], onDelete: SetNull)
+  invoiceAttachment StoredObject?         @relation("CommercialInvoiceAttachment", fields: [invoiceAttachmentId], references: [id], onDelete: Restrict)
+  items          CommercialDocumentItem[]
+  accountingEntries CommercialAccountingEntry[]
+  retentions     CommercialRetention[]
+
+  @@index([firmId, companyId, type, issueDate])
+  @@index([counterpartyId, issueDate])
+  @@index([taxRateId])
+  @@map("commercial_documents")
+  @@schema("app")
+}
+
+model CommercialDocumentItem {
+  id          String             @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  documentId  String             @map("document_id") @db.Uuid
+  position    Int
+  description String
+  quantity    Decimal            @db.Decimal(20, 6)
+  unitPrice   Decimal            @map("unit_price") @db.Decimal(20, 6)
+  taxable     Boolean            @default(true)
+  lineTotal   Decimal            @map("line_total") @db.Decimal(20, 6)
+  document    CommercialDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, position])
+  @@map("commercial_document_items")
+  @@schema("app")
+}
+
+model CommercialAccountingEntry {
+  id         String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId     String              @map("firm_id") @db.Uuid
+  companyId  String              @map("company_id") @db.Uuid
+  documentId String              @map("document_id") @db.Uuid
+  accountId  String              @map("account_id") @db.Uuid
+  position   Int
+  debit      Decimal             @default(0) @db.Decimal(20, 6)
+  credit     Decimal             @default(0) @db.Decimal(20, 6)
+  source     String
+  document   CommercialDocument  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  account    CompanyChartAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, position])
+  @@index([firmId, companyId, accountId])
+  @@map("commercial_accounting_entries")
+  @@schema("app")
+}
+
+model CommercialRetention {
+  id                      String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId                  String                    @map("firm_id") @db.Uuid
+  companyId               String                    @map("company_id") @db.Uuid
+  documentId              String                    @map("document_id") @db.Uuid
+  type                    CommercialRetentionType
+  receiptNumber           String                    @map("receipt_number")
+  normalizedReceiptNumber String                    @map("normalized_receipt_number")
+  issueDate               DateTime                  @map("issue_date") @db.Date
+  percentage              Decimal?                  @db.Decimal(8, 4)
+  amount                  Decimal                   @db.Decimal(20, 6)
+  attachmentId            String?                   @unique @map("attachment_id") @db.Uuid
+  createdAt               DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  document                CommercialDocument        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  attachment              StoredObject?             @relation("CommercialRetentionAttachment", fields: [attachmentId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, type])
+  @@unique([companyId, type, normalizedReceiptNumber])
+  @@index([firmId, companyId, type, issueDate])
+  @@map("commercial_retentions")
   @@schema("app")
 }
 
@@ -570,41 +921,41 @@ model CompanyOffering {
 }
 
 model ComplianceCase {
-  id                String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  firmId            String                   @map("firm_id") @db.Uuid
-  companyId         String                   @map("company_id") @db.Uuid
-  offeringId        String                   @map("offering_id") @db.Uuid
-  assignedProfileId String?                  @map("assigned_profile_id") @db.Uuid
-  periodKey         String                   @map("period_key")
-  periodLabel       String                   @map("period_label")
-  periodMonth       DateTime                 @map("period_month") @db.Date
-  periodStart       DateTime                 @map("period_start") @db.Date
-  periodEnd         DateTime                 @map("period_end") @db.Date
-  dueDate           DateTime?                @map("due_date") @db.Date
-  status            ComplianceCaseStatus     @default(PENDING)
-  activityMode      ComplianceActivityMode?  @map("activity_mode")
-  filedAt           DateTime?                @map("filed_at") @db.Date
-  paidAt            DateTime?                @map("paid_at") @db.Date
-  amount            Decimal?                 @db.Decimal(20, 6)
-  offeringName      String                   @map("offering_name")
-  offeringKind      CompanyOfferingKind      @map("offering_kind")
-  organism          String
-  cadence           String
-  regime            String
-  deadlineBasis     String                   @map("deadline_basis")
-  ruleVersion       Int                      @map("rule_version")
-  sourceSnapshot    String?                  @map("source_snapshot")
-  evidenceRequirements Json                  @default("[]") @map("evidence_requirements") @db.JsonB
-  suppressedAt      DateTime?                @map("suppressed_at") @db.Timestamptz(6)
-  suppressionReason String?                  @map("suppression_reason")
-  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
-  version           Int                      @default(1)
-  firm              Firm                     @relation(fields: [firmId], references: [id], onDelete: Restrict)
-  company           Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  offering          FirmOffering             @relation(fields: [offeringId], references: [id], onDelete: Restrict)
-  assignedProfile   UserProfile?             @relation("ComplianceCaseAssignee", fields: [assignedProfileId], references: [id], onDelete: SetNull)
-  evidences         ComplianceCaseEvidence[]
+  id                   String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId               String                   @map("firm_id") @db.Uuid
+  companyId            String                   @map("company_id") @db.Uuid
+  offeringId           String                   @map("offering_id") @db.Uuid
+  assignedProfileId    String?                  @map("assigned_profile_id") @db.Uuid
+  periodKey            String                   @map("period_key")
+  periodLabel          String                   @map("period_label")
+  periodMonth          DateTime                 @map("period_month") @db.Date
+  periodStart          DateTime                 @map("period_start") @db.Date
+  periodEnd            DateTime                 @map("period_end") @db.Date
+  dueDate              DateTime?                @map("due_date") @db.Date
+  status               ComplianceCaseStatus     @default(PENDING)
+  activityMode         ComplianceActivityMode?  @map("activity_mode")
+  filedAt              DateTime?                @map("filed_at") @db.Date
+  paidAt               DateTime?                @map("paid_at") @db.Date
+  amount               Decimal?                 @db.Decimal(20, 6)
+  offeringName         String                   @map("offering_name")
+  offeringKind         CompanyOfferingKind      @map("offering_kind")
+  organism             String
+  cadence              String
+  regime               String
+  deadlineBasis        String                   @map("deadline_basis")
+  ruleVersion          Int                      @map("rule_version")
+  sourceSnapshot       String?                  @map("source_snapshot")
+  evidenceRequirements Json                     @default("[]") @map("evidence_requirements") @db.JsonB
+  suppressedAt         DateTime?                @map("suppressed_at") @db.Timestamptz(6)
+  suppressionReason    String?                  @map("suppression_reason")
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version              Int                      @default(1)
+  firm                 Firm                     @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company              Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  offering             FirmOffering             @relation(fields: [offeringId], references: [id], onDelete: Restrict)
+  assignedProfile      UserProfile?             @relation("ComplianceCaseAssignee", fields: [assignedProfileId], references: [id], onDelete: SetNull)
+  evidences            ComplianceCaseEvidence[]
 
   @@unique([companyId, offeringId, periodKey])
   @@index([firmId, periodMonth, status])
@@ -830,6 +1181,8 @@ model StoredObject {
   documentVersions   DocumentVersion[]
   firmLogo           Firm?                   @relation("FirmLogo")
   complianceEvidence ComplianceCaseEvidence?
+  commercialInvoiceDocument CommercialDocument? @relation("CommercialInvoiceAttachment")
+  commercialRetention CommercialRetention? @relation("CommercialRetentionAttachment")
 
   @@unique([bucket, objectKey])
   @@index([firmId, companyId, status])

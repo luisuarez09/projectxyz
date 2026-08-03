@@ -11,13 +11,15 @@ export type TaxEvidenceKind = (typeof taxEvidenceOptions)[number]["kind"];
 export type EvidenceRequirement = {
   kind: TaxEvidenceKind;
   required: boolean;
+  fiscalBoard: boolean;
 };
 
 export const defaultTaxEvidenceRequirements: EvidenceRequirement[] = [
-  { kind: "DECLARATION_RECEIPT", required: true },
-  { kind: "DECLARATION_FILE", required: true },
-  { kind: "PAYMENT_FORM", required: false },
-  { kind: "PAYMENT_RECEIPT", required: false },
+  { kind: "SOLVENCY", required: false, fiscalBoard: true },
+  { kind: "DECLARATION_RECEIPT", required: true, fiscalBoard: true },
+  { kind: "DECLARATION_FILE", required: true, fiscalBoard: true },
+  { kind: "PAYMENT_FORM", required: false, fiscalBoard: true },
+  { kind: "PAYMENT_RECEIPT", required: false, fiscalBoard: true },
 ];
 
 export function evidenceLabel(kind: TaxEvidenceKind) {

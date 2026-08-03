@@ -20,6 +20,7 @@ const evidenceRequirementSchema = z.object({
     "PAYMENT_RECEIPT",
   ]),
   required: z.boolean(),
+  fiscalBoard: z.boolean().default(false),
 });
 
 const dateText = z

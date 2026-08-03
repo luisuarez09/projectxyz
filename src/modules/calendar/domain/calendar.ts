@@ -49,6 +49,7 @@ export type CalendarEvidenceRequirement = {
     | "PAYMENT_FORM"
     | "PAYMENT_RECEIPT";
   required: boolean;
+  fiscalBoard: boolean;
 };
 
 export type CalendarCaseView = {

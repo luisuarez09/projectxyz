@@ -490,6 +490,11 @@ el selector de empresa, los directorios de clientes/empresas, documentos en
 cuarentena y recorridos de los cuatro perfiles; por ello la fase aún no se
 declara terminada.
 
+La configuración contable ya incluye una plantilla editable por firma y planes
+de cuentas independientes por empresa, con aplicación idempotente, permisos,
+RLS, control optimista y auditoría. Este módulo administra catálogos contables;
+no habilita todavía asientos ni contabilidad completa.
+
 - Implementar Better Auth con alta sólo por invitación.
 - Conectar verificación, recuperación, sesiones y MFA.
 - Integrar Mailrelay SMTP y las plantillas de identidad.

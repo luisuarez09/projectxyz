@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
   Check,
   ExternalLink,
@@ -24,6 +26,7 @@ import { CalendarReconciliationPanel } from "@/components/calendar-reconciliatio
 import { SpecialTaxpayerCalendar } from "@/components/special-taxpayer-calendar";
 import { VatRateSettings } from "@/components/vat-rate-settings";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -1009,7 +1012,8 @@ function RuleDialog({
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-stone-500">
                     Habilita solo los archivos que este impuesto debe mostrar en
-                    el calendario y marca cuáles son obligatorios.
+                    el calendario, marca cuáles son obligatorios o van en la
+                    cartelera fiscal y define su orden de impresión.
                   </p>
                 </div>
               </div>
@@ -1154,7 +1158,7 @@ function EvidenceRequirementsEditor({
   const toggleEnabled = (kind: TaxEvidenceKind, enabled: boolean) => {
     onChange(
       enabled
-        ? [...value, { kind, required: false }]
+        ? [...value, { kind, required: false, fiscalBoard: false }]
         : value.filter((item) => item.kind !== kind),
     );
   };
@@ -1163,13 +1167,47 @@ function EvidenceRequirementsEditor({
       value.map((item) => (item.kind === kind ? { ...item, required } : item)),
     );
   };
+  const toggleFiscalBoard = (kind: TaxEvidenceKind, fiscalBoard: boolean) => {
+    onChange(
+      value.map((item) =>
+        item.kind === kind ? { ...item, fiscalBoard } : item,
+      ),
+    );
+  };
+  const move = (kind: TaxEvidenceKind, offset: -1 | 1) => {
+    const index = value.findIndex((item) => item.kind === kind);
+    const destination = index + offset;
+    if (index < 0 || destination < 0 || destination >= value.length) return;
+    const next = [...value];
+    [next[index], next[destination]] = [next[destination], next[index]];
+    onChange(next);
+  };
+  const orderedOptions = [
+    ...value.map(({ kind }) =>
+      taxEvidenceOptions.find((option) => option.kind === kind),
+    ),
+    ...taxEvidenceOptions.filter(
+      (option) => !value.some(({ kind }) => kind === option.kind),
+    ),
+  ].filter((option): option is (typeof taxEvidenceOptions)[number] =>
+    Boolean(option),
+  );
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      {taxEvidenceOptions.map((option) => {
+    <div className="space-y-2">
+      <div className="hidden grid-cols-[minmax(0,1fr)_120px_120px_80px] gap-3 px-3 text-[11px] font-medium uppercase tracking-wide text-stone-400 sm:grid">
+        <span>Documento</span>
+        <span>Obligatorio</span>
+        <span>Cartelera</span>
+        <span>Orden</span>
+      </div>
+      {orderedOptions.map((option) => {
         const requirement = value.find(({ kind }) => kind === option.kind);
+        const index = requirement
+          ? value.findIndex(({ kind }) => kind === option.kind)
+          : -1;
         return (
           <div
-            className={`rounded-xl border p-3 transition ${requirement ? "border-[#86a995] bg-[#f1f7f2] dark:border-emerald-800 dark:bg-emerald-950/30" : "border-stone-200 dark:border-stone-700"}`}
+            className={`grid gap-3 rounded-xl border p-3 transition sm:grid-cols-[minmax(0,1fr)_120px_120px_80px] sm:items-center ${requirement ? "border-[#86a995] bg-[#f1f7f2] dark:border-emerald-800 dark:bg-emerald-950/30" : "border-stone-200 dark:border-stone-700"}`}
             key={option.kind}
           >
             <label className="flex cursor-pointer items-start gap-2.5">
@@ -1187,14 +1225,14 @@ function EvidenceRequirementsEditor({
                 </span>
                 <span className="mt-1 block text-[11px] leading-4 text-stone-500">
                   {requirement
-                    ? "Visible en el calendario"
+                    ? `Posición ${index + 1} en el PDF`
                     : "No se solicitará"}
                 </span>
               </span>
             </label>
             {requirement && (
-              <label className="mt-3 flex cursor-pointer items-center justify-between gap-2 border-t border-stone-200 pt-2.5 text-xs font-medium text-stone-600 dark:border-stone-700 dark:text-stone-300">
-                <span>Obligatorio</span>
+              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs font-medium text-stone-600 dark:text-stone-300">
+                <span className="sm:sr-only">Obligatorio</span>
                 <Switch
                   aria-label={`${evidenceLabel(option.kind)} obligatorio`}
                   checked={requirement.required}
@@ -1204,6 +1242,43 @@ function EvidenceRequirementsEditor({
                   size="sm"
                 />
               </label>
+            )}
+            {requirement && (
+              <label className="flex cursor-pointer items-center justify-between gap-2 text-xs font-medium text-stone-600 dark:text-stone-300">
+                <span className="sm:sr-only">Cartelera fiscal</span>
+                <Switch
+                  aria-label={`${evidenceLabel(option.kind)} en cartelera fiscal`}
+                  checked={requirement.fiscalBoard}
+                  onCheckedChange={(checked) =>
+                    toggleFiscalBoard(option.kind, checked)
+                  }
+                  size="sm"
+                />
+              </label>
+            )}
+            {requirement && (
+              <div className="flex justify-end gap-1">
+                <Button
+                  aria-label={`Subir ${evidenceLabel(option.kind)}`}
+                  disabled={index === 0}
+                  onClick={() => move(option.kind, -1)}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <ArrowUp size={15} />
+                </Button>
+                <Button
+                  aria-label={`Bajar ${evidenceLabel(option.kind)}`}
+                  disabled={index === value.length - 1}
+                  onClick={() => move(option.kind, 1)}
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  <ArrowDown size={15} />
+                </Button>
+              </div>
             )}
           </div>
         );

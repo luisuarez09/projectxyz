@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { calendarError } from "@/app/api/calendar/calendar-error";
-import { generateArchivePdf, getArchivePeriod } from "@/modules/archive/application/archive";
+import {
+  generateArchivePdf,
+  generateFiscalBoardPdf,
+  getArchivePeriod,
+} from "@/modules/archive/application/archive";
 import { resolveAuthContext } from "@/modules/identity/application/auth-context";
 
 export async function GET(request: Request) {
@@ -24,7 +28,10 @@ export async function POST(request: Request) {
     const input = await request.json();
     const requestedCompanyId = typeof input?.companyId === "string" ? input.companyId : null;
     const auth = await resolveAuthContext(request.headers, requestedCompanyId);
-    const result = await generateArchivePdf(auth, input);
+    const result =
+      input?.mode === "FISCAL_BOARD"
+        ? await generateFiscalBoardPdf(auth, input)
+        : await generateArchivePdf(auth, input);
     return new Response(Buffer.from(result.bytes), {
       headers: {
         "Content-Type": "application/pdf",

@@ -43,6 +43,7 @@ const firmSettings = [
   { label: "General", href: "/configuracion/general" },
   { label: "Correo", href: "/configuracion/correo" },
   { label: "Planes", href: "/configuracion/planes" },
+  { label: "Plan de cuentas base", href: "/configuracion/plan-cuentas-base" },
   { label: "Impuestos", href: "/configuracion/impuestos" },
   { label: "Servicios", href: "/configuracion/servicios" },
   { label: "Tasas de cambio", href: "/configuracion/tasas-cambio" },
@@ -54,7 +55,6 @@ const operations = [
   { label: "Proveedores", href: "/operaciones/proveedores" },
   { label: "Compras", href: "/operaciones/compras" },
   { label: "Ventas", href: "/operaciones/ventas" },
-  { label: "Retenciones", href: "/operaciones/ventas?tab=retenciones" },
 ];
 
 const employees = [

@@ -1,150 +1,371 @@
-"use client";;
-import { AttachmentInput } from "@/components/ui/attachment-input";
-import { ArrowLeft, BookOpenCheck, Check, ChevronRight, CircleCheck, Clock3, Download, ExternalLink, FileCheck2, FileSpreadsheet, Info, LockKeyhole, Paperclip, ReceiptText, Save, Send, ShieldCheck, UploadCloud } from "lucide-react";
+"use client";
+
+import { AlertCircle, ArrowLeft, BadgeCheck, BookOpen, Calculator, Check, CircleCheck, FileCheck2, FileClock, FileSpreadsheet, FileText, LoaderCircle, LockKeyhole, ReceiptText, RefreshCw, Save, ShieldCheck, ShoppingCart, TrendingUp } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import { DeclarationConsultationView } from "@/components/declaration-consultation-view";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Input } from "@/components/ui/input";
+import { useCompanyContext } from "@/components/company-context";
+import { AttachmentInput } from "@/components/ui/attachment-input";
+import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { calculateIvaDetermination } from "@/modules/declarations/domain/iva";
+import { buildIvaFiscalBookSnapshot, type IvaFiscalBookSnapshot } from "@/modules/declarations/domain/iva-books";
 
-type Purchase = { id: string; date: string; supplier: string; document: string; base: number; credit: number; origin: string };
-type Evidence = { key: "certificate" | "declaration" | "payment-plan" | "payment-receipt"; label: string; detail: string; required: boolean; status: "Pendiente" | "Adjunto"; file?: File };
-type ReceivedIvaRetention = {
-  id: string;
-  receipt: string;
-  date: string;
-  customer: string;
-  invoice: string;
-  invoiceVat: number;
-  percentage: 75 | 100;
-  amount: number;
-  originPeriod: string;
-  voucher: string;
-  status: "Disponible" | "Aplicada";
-  appliedTo?: string;
+type Status = "PENDING" | "PREPARING" | "READY_FOR_REVIEW" | "SUBMITTED" | "PAID" | "CLOSED" | "INCIDENT" | "NOT_APPLICABLE";
+type BookRetention = { receiptNumber: string; percentage: string; amount: string };
+type Sale = { id: string; date: string; customer: string; rif: string; documentNumber: string; taxableBase: string; exemptAmount: string; nonTaxableAmount: string; taxAmount: string; totalAmount: string; vatRate: string; taxRateName: string; retentions: BookRetention[] };
+type Purchase = { id: string; date: string; supplier: string; rif: string; documentNumber: string; originPeriod: string; taxableBase: string; exemptAmount: string; nonTaxableAmount: string; taxAmount: string; totalAmount: string; vatRate: string; taxRateName: string; retentions: BookRetention[]; selected: boolean };
+type Retention = { id: string; date: string; customer: string; rif: string; invoiceNumber: string; receiptNumber: string; percentage: string; amount: string; voucher: { name: string; status: string } | null; selected: boolean };
+type EvidenceKind = "SOLVENCY" | "DECLARATION_RECEIPT" | "DECLARATION_FILE" | "PAYMENT_FORM" | "PAYMENT_RECEIPT";
+type Workspace = {
+  declaration: { id: string; version: number; period: string; periodLabel: string; status: Status; filedAt: string; declaredAmount: string; previousFiscalCredit: string; previousRetentionCredit: string; determinedAt: string | null };
+  fiscalBookSnapshot: IvaFiscalBookSnapshot | null;
+  company: { id: string; legalName: string; rif: string; fiscalAddress: string | null };
+  case: { id: string; dueDate: string; source: string; ruleVersion: number; requirements: Array<{ kind: EvidenceKind; required: boolean; fiscalBoard: boolean; label: string }>; evidences: Array<{ id: string; kind: EvidenceKind; name: string; status: string }> };
+  sales: Sale[];
+  purchases: Purchase[];
+  retentions: Retention[];
+  canManage: boolean;
 };
 
-const purchases: Purchase[] = [
-  { id: "C-184", date: "04 jun", supplier: "Distribuidora Central, C.A.", document: "F-003421", base: 18400, credit: 2944, origin: "Junio 2026" },
-  { id: "C-191", date: "11 jun", supplier: "Empaques del Centro, C.A.", document: "F-001876", base: 9730, credit: 1556.8, origin: "Junio 2026" },
-  { id: "C-205", date: "18 jun", supplier: "Servicios Eléctricos VZ, C.A.", document: "F-009824", base: 4750, credit: 760, origin: "Junio 2026" },
-  { id: "C-142", date: "28 may", supplier: "Suministros La Estrella, C.A.", document: "F-006118", base: 12200, credit: 1952, origin: "Mayo 2026" },
-  { id: "C-099", date: "16 sep 2025", supplier: "Inversiones Rincón, C.A.", document: "F-000921", base: 6340, credit: 1014.4, origin: "Pendiente · 9 meses" },
-];
-
-const sales = [
-  { label: "Ventas gravadas", documents: 148, base: 125840, debit: 20134.4 },
-  { label: "Ventas exentas", documents: 31, base: 44160, debit: 0 },
-];
-const receivedIvaRetentions: ReceivedIvaRetention[] = [
-  { id: "RI-144", receipt: "R-IVA-000144", date: "27 jun 2026", customer: "Comercializadora Los Andes, C.A.", invoice: "F-000842", invoiceVat: 1226.67, percentage: 75, amount: 920, originPeriod: "Junio 2026", voucher: "comprobante_iva_000144.pdf", status: "Disponible" },
-  { id: "RI-102", receipt: "R-IVA-000102", date: "29 may 2026", customer: "Inversiones Maracaibo, C.A.", invoice: "F-000779", invoiceVat: 640, percentage: 100, amount: 640, originPeriod: "Mayo 2026", voucher: "comprobante_iva_000102.pdf", status: "Aplicada", appliedTo: "Declaración IVA · Mayo 2026" },
-];
-const currency = new Intl.NumberFormat("es-VE", { style: "currency", currency: "VES", minimumFractionDigits: 2 });
+const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "VES", minimumFractionDigits: 2 });
 const number = new Intl.NumberFormat("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const date = new Intl.DateTimeFormat("es-VE", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
+const statusLabels: Record<Status, string> = { PENDING: "Pendiente", PREPARING: "En preparación", READY_FOR_REVIEW: "Listo para revisión", SUBMITTED: "Declarada", PAID: "Pagada", CLOSED: "Cerrada", INCIDENT: "Con incidencia", NOT_APPLICABLE: "No aplica" };
 
-export function IvaDeclarationWorkspace() {
-  const [selected, setSelected] = useState(() => new Set(["C-184", "C-191", "C-205"]));
-  const [selectedRetentions, setSelectedRetentions] = useState(() => new Set(["RI-144"]));
-  const [tab, setTab] = useState<"resumen" | "compras" | "retenciones" | "libros" | "cierre">("resumen");
-  const [reviewed, setReviewed] = useState(false);
-  const [bookPreview, setBookPreview] = useState<"sales" | "purchases" | null>(null);
-  const [declaredOn, setDeclaredOn] = useState("");
-  const [declaredAmount, setDeclaredAmount] = useState<number | null>(null);
-  const [closed, setClosed] = useState(false);
-  const [evidences, setEvidences] = useState<Evidence[]>([
-    { key: "certificate", label: "Certificado de declaración", detail: "Constancia emitida por el portal.", required: true, status: "Pendiente" },
-    { key: "declaration", label: "Declaración presentada", detail: "Copia de la declaración registrada.", required: true, status: "Pendiente" },
-    { key: "payment-plan", label: "Planilla de pago", detail: "Planilla generada para el pago del período.", required: true, status: "Pendiente" },
-    { key: "payment-receipt", label: "Comprobante de pago", detail: "Al adjuntarlo se marcará como pagada.", required: false, status: "Pendiente" },
-  ]);
-  const selectedPurchases = purchases.filter((item) => selected.has(item.id));
-  const selectedCredit = selectedPurchases.reduce((total, item) => total + item.credit, 0);
-  const totalSales = sales.reduce((total, item) => total + item.base, 0);
-  const hasMixedSales = sales.some((item) => item.label === "Ventas gravadas" && item.base > 0) && sales.some((item) => item.label === "Ventas exentas" && item.base > 0);
-  const proration = sales.find((item) => item.label === "Ventas gravadas")!.base / totalSales;
-  const usableCredit = hasMixedSales ? selectedCredit * proration : selectedCredit;
-  const debit = sales.reduce((total, item) => total + item.debit, 0);
-  const availableRetentions = receivedIvaRetentions.filter((item) => item.status === "Disponible");
-  const retainedIvaOnSales = availableRetentions.filter((item) => selectedRetentions.has(item.id)).reduce((total, item) => total + item.amount, 0);
-  const netBalance = debit - usableCredit - retainedIvaOnSales;
-  const calculatedPayable = Math.max(0, netBalance);
-  const amountToPay = declaredAmount ?? calculatedPayable;
-  const paymentRequired = amountToPay > 0;
-  const visibleEvidences = evidences.filter((item) => item.key !== "payment-plan" ? item.required || paymentRequired : paymentRequired);
-  const allEvidenceReady = visibleEvidences.every((item) => item.status === "Adjunto");
-  const evidenceAttached = (key: Evidence["key"]) => evidences.find((item) => item.key === key)?.status === "Adjunto";
-  const togglePurchase = (id: string) => setSelected((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const toggleRetention = (id: string) => setSelectedRetentions((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const allPurchasesSelected = selected.size === purchases.length;
-  const toggleAllPurchases = () => setSelected(allPurchasesSelected ? new Set() : new Set(purchases.map((item) => item.id)));
-  const attach = (key: Evidence["key"], file?: File) => { if (!file) return; setEvidences((items) => items.map((item) => item.key === key ? { ...item, label: file.name, file, status: "Adjunto" } : item)); };
-  if (closed) return <DeclarationConsultationView amount={currency.format(amountToPay)} calculation="Determinación confirmada de junio 2026" documents={visibleEvidences.map((item) => ({ label: item.label, detail: item.detail, file: item.file }))} period="Junio 2026" tax="IVA" />;
+function amount(value: string | number | null | undefined) {
+  return Number(value ?? 0);
+}
+
+function displayDate(value: string) {
+  return value ? date.format(new Date(`${value}T00:00:00.000Z`)) : "—";
+}
+
+function calculate(data: Workspace | null, selectedPurchases: Set<string>, selectedRetentions: Set<string>) {
+  const sales = data?.sales ?? [];
+  const purchases = (data?.purchases ?? []).filter(({ id }) => selectedPurchases.has(id));
+  const retentions = (data?.retentions ?? []).filter(({ id }) => selectedRetentions.has(id));
+  const nonTaxableAmount = sales.reduce((sum, item) => sum + amount(item.nonTaxableAmount), 0);
+  const previousFiscalCredit = amount(data?.declaration.previousFiscalCredit);
+  const previousRetentionCredit = amount(data?.declaration.previousRetentionCredit);
+  return {
+    ...calculateIvaDetermination({
+      sales: sales.map((item) => ({ taxableBase: amount(item.taxableBase), exemptAmount: amount(item.exemptAmount), taxAmount: amount(item.taxAmount) })),
+      purchases: purchases.map((item) => ({ taxAmount: amount(item.taxAmount) })),
+      retentions: retentions.map((item) => ({ amount: amount(item.amount) })),
+      previousFiscalCredit,
+      previousRetentionCredit,
+    }),
+    nonTaxableAmount,
+    previousFiscalCredit,
+    previousRetentionCredit,
+  };
+}
+
+export function IvaDeclarationWorkspace({ period }: { period: string }) {
+  const { activeCompanyId, loading: companyLoading } = useCompanyContext();
+  const [data, setData] = useState<Workspace | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [tab, setTab] = useState<"determination" | "sales" | "purchases" | "retentions" | "books" | "closing">("determination");
+  const [selectedPurchases, setSelectedPurchases] = useState<Set<string>>(new Set());
+  const [selectedRetentions, setSelectedRetentions] = useState<Set<string>>(new Set());
+  const [filedAt, setFiledAt] = useState("");
+  const [declaredAmount, setDeclaredAmount] = useState("");
+  const [confirmDifference, setConfirmDifference] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<EvidenceKind | null>(null);
+
+  const applyWorkspace = useCallback((workspace: Workspace) => {
+    setData(workspace);
+    setSelectedPurchases(new Set(workspace.purchases.filter(({ selected }) => selected).map(({ id }) => id)));
+    setSelectedRetentions(new Set(workspace.retentions.filter(({ selected }) => selected).map(({ id }) => id)));
+    setFiledAt(workspace.declaration.filedAt);
+    setDeclaredAmount(workspace.declaration.declaredAmount);
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!activeCompanyId) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/declarations/iva?period=${period}`, { cache: "no-store" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "No fue posible cargar la declaración de IVA.");
+      applyWorkspace(body);
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No fue posible cargar la declaración de IVA.");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeCompanyId, applyWorkspace, period]);
+
+  useEffect(() => { if (!companyLoading) void load(); }, [companyLoading, load]);
+
+  const totals = useMemo(() => calculate(data, selectedPurchases, selectedRetentions), [data, selectedPurchases, selectedRetentions]);
+  const closed = data ? ["SUBMITTED", "PAID", "CLOSED"].includes(data.declaration.status) : false;
+  const allPurchasesSelected = Boolean(data?.purchases.length) && selectedPurchases.size === data?.purchases.length;
+  const allRetentionsSelected = Boolean(data?.retentions.length) && selectedRetentions.size === data?.retentions.length;
+  const actualDeclaredAmount = declaredAmount === "" ? totals.taxPayable : amount(declaredAmount.replace(",", "."));
+  const hasDifference = Math.abs(actualDeclaredAmount - totals.taxPayable) > 0.01;
+
+  function toggle(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
+    setter((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+    setMessage("");
+  }
+
+  async function mutate(action: "save" | "review" | "close") {
+    if (!data) return;
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/declarations/iva", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          period,
+          action,
+          version: data.declaration.version,
+          selectedPurchaseIds: [...selectedPurchases],
+          selectedRetentionIds: [...selectedRetentions],
+          filedAt,
+          declaredAmount: declaredAmount || String(totals.taxPayable),
+          confirmDifference,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "No fue posible guardar la determinación.");
+      applyWorkspace(body);
+      setMessage(action === "close" ? "La declaración quedó declarada. El compromiso de pago ya está disponible para este expediente." : action === "review" ? "La determinación quedó lista para revisión." : "Borrador guardado.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No fue posible guardar la determinación.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function uploadEvidence(kind: EvidenceKind, file: File | null) {
+    if (!data || !file) return;
+    setUploading(kind);
+    setError("");
+    try {
+      const form = new FormData();
+      form.set("kind", kind);
+      form.set("file", file);
+      const response = await fetch(`/api/calendar/${data.case.id}/evidence`, { method: "POST", body: form });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "No fue posible cargar el soporte.");
+      await load();
+      setMessage("Soporte cargado en el expediente.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "No fue posible cargar el soporte.");
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  if (companyLoading || loading) return <State icon={LoaderCircle} title="Preparando determinación" description="Consolidando ventas, compras, retenciones y saldos anteriores…" spin />;
+  if (!activeCompanyId) return <State icon={ReceiptText} title="Selecciona una empresa" description="El expediente de IVA se determina dentro del contexto de una empresa específica." />;
+  if (!data) return <State icon={AlertCircle} title="No fue posible abrir el expediente" description={error || "Verifica que el IVA esté habilitado y tenga una plantilla vigente en la configuración de la firma."} action={<Button onClick={() => void load()} variant="outline"><RefreshCw /> Reintentar</Button>} />;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-10">
-      <div className="flex flex-col gap-5 border-b border-stone-200 pb-6 dark:border-stone-800 lg:flex-row lg:items-end lg:justify-between"><div><Link className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-[#14352d] dark:hover:text-emerald-200" href="/declaraciones"><ArrowLeft size={15} /> Declaraciones</Link><div className="mt-4 flex flex-wrap items-center gap-2"><p className="text-sm text-stone-500">Declaraciones / IVA</p><span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300">Borrador en preparación</span></div><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">IVA · Junio 2026</h1><p className="mt-2 text-sm text-stone-600 dark:text-stone-300">Nueva Confitería del Sur, C.A. <span className="mx-1 text-stone-300">·</span> RIF J-00000000-0</p></div><div className="flex flex-wrap gap-2"><button className="inline-flex h-9 items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 text-sm font-medium shadow-sm hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800" type="button"><Save size={16} /> Guardar borrador</button><button className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#14352d] px-3 text-sm font-medium text-white shadow-sm hover:bg-[#0e2821]" onClick={() => setReviewed(true)} type="button"><Check size={16} /> Marcar listo para revisión</button>{reviewed && <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#14352d] px-3 text-sm font-medium text-[#14352d] hover:bg-[#e7f0e9] dark:border-emerald-300 dark:text-emerald-200" onClick={() => setClosed(true)} type="button"><Check size={16} /> Confirmar cierre</button>}</div></div>
-      <div className="mt-5 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900 md:grid-cols-4"><Workflow number="1" label="Datos consolidados" detail="179 ventas importadas" done /><Workflow number="2" label="Compras seleccionadas" detail={`${selectedPurchases.length} facturas incluidas`} done /><Workflow number="3" label="Revisión interna" detail={reviewed ? "Listo para declarar" : "Pendiente de responsable"} active={!reviewed} done={reviewed} /><Workflow number="4" label="Presentación y cierre" detail="Declaración, planilla y pago" /></div>
-      <div className="mt-6 flex gap-1 overflow-x-auto border-b border-stone-200 dark:border-stone-800">{[["resumen", "Determinación"], ["compras", "Compras"], ["retenciones", "Retenciones de IVA"], ["libros", "Libros preliminares"], ["cierre", "Presentación y cierre"]].map(([id, label]) => <button className={`shrink-0 border-b-2 px-3 py-3 text-sm font-medium ${tab === id ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"}`} key={id} onClick={() => setTab(id as typeof tab)} type="button">{label}</button>)}</div>
-      {tab === "resumen" && <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]"><div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Débito fiscal" value={currency.format(debit)} detail="Ventas gravadas" tone="stone" /><Metric label="Crédito aplicable" value={currency.format(usableCredit)} detail={hasMixedSales ? `Prorrateado a ${number.format(proration * 100)} %` : "Compras seleccionadas"} tone="sky" /><Metric label="Retenciones de IVA aplicadas" value={currency.format(retainedIvaOnSales)} detail="Activo a descontar" tone="violet" /><Metric label="Impuesto estimado" value={currency.format(calculatedPayable)} detail="Sujeto a revisión" tone="emerald" /></div><section className="rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold">Determinación preliminar</h2><p className="mt-1 text-sm text-stone-500">Resumen basado en ventas, compras elegidas y retenciones registradas.</p></div><span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300"><Clock3 size={13} /> Sin presentar</span></div><div className="divide-y divide-stone-100 px-5 dark:divide-stone-800"><Line label="Débito fiscal de ventas gravadas" value={currency.format(debit)} /><Line label="Crédito fiscal de compras seleccionadas" value={currency.format(selectedCredit)} detail={`${selectedPurchases.length} compras sin aprovechar previamente`} />{hasMixedSales && <><Line label="Factor de prorrateo" value={`${number.format(proration * 100)} %`} detail="Ventas gravadas ÷ ventas totales" /><Line label="Crédito fiscal aprovechable" value={currency.format(usableCredit)} /></>}<Line label="Retenciones de IVA aplicadas" value={`(${currency.format(retainedIvaOnSales)})`} detail="Activo aplicado contra el impuesto determinado" /><div className="flex items-center justify-between py-4"><div><p className="font-semibold">Impuesto estimado a pagar</p><p className="mt-1 text-xs text-stone-500">No constituye la declaración definitiva.</p></div><p className="text-xl font-semibold text-[#14352d] dark:text-emerald-200">{currency.format(calculatedPayable)}</p></div></div></section>{hasMixedSales ? <Notice text="La empresa tiene ventas gravadas y exentas; por ello se aplica la regla de prorrateo que debe estar configurada, vigente y validada antes del cierre." /> : <Notice text="No se aplica prorrateo porque las ventas del período no combinan operaciones gravadas y exentas." />}</div><aside className="space-y-4"><AuditCard reviewed={reviewed} selected={selectedPurchases.length} mixed={hasMixedSales} /><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex items-center justify-between"><div><p className="font-semibold">Acciones del expediente</p><p className="mt-1 text-xs text-stone-500">Se habilitan según el estado.</p></div><LockKeyhole size={17} className="text-stone-400" /></div><button className="mt-4 flex w-full items-center justify-between rounded-lg border border-stone-200 px-3 py-2.5 text-left text-sm font-medium hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800" onClick={() => setTab("libros")} type="button">Generar libros preliminares <ChevronRight size={16} /></button><button className="mt-2 flex w-full items-center justify-between rounded-lg border border-stone-200 px-3 py-2.5 text-left text-sm font-medium hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800" onClick={() => setTab("cierre")} type="button">Registrar presentación <ChevronRight size={16} /></button></section></aside></section>}
-      {tab === "compras" && <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]"><div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold">Compras disponibles para aprovechar</h2><p className="mt-1 text-sm text-stone-500">Estas son compras ya registradas que todavía no han sido aprovechadas en otra declaración. Selecciona las que se incluirán en este período.</p></div><div className="flex shrink-0 items-center gap-3"><span className="text-sm font-medium text-[#14352d] dark:text-emerald-200">{selectedPurchases.length} de {purchases.length} incluidas</span><button className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800" onClick={toggleAllPurchases} type="button">{allPurchasesSelected ? "Desmarcar todas" : "Marcar todas"}</button></div></div><div className="overflow-x-auto"><Table className="min-w-full text-left text-sm"><TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="w-12 px-5 py-3"><input aria-label="Marcar o desmarcar todas las compras" checked={allPurchasesSelected} className="size-4 accent-[#14352d]" onChange={toggleAllPurchases} type="checkbox" /></TableHead><TableHead className="px-3 py-3">Proveedor / documento</TableHead><TableHead className="px-3 py-3">Período de origen</TableHead><TableHead className="px-3 py-3 text-right">Base imponible</TableHead><TableHead className="px-5 py-3 text-right">Crédito fiscal</TableHead></TableRow></TableHeader><TableBody className="divide-y divide-stone-100 dark:divide-stone-800">{purchases.map((item) => <TableRow className={selected.has(item.id) ? "bg-emerald-50/40 dark:bg-emerald-950/15" : ""} key={item.id}><TableCell className="px-5 py-4"><input aria-label={`Incluir ${item.document}`} checked={selected.has(item.id)} className="size-4 accent-[#14352d]" onChange={() => togglePurchase(item.id)} type="checkbox" /></TableCell><TableCell className="px-3 py-4"><p className="font-medium">{item.supplier}</p><p className="mt-0.5 text-xs text-stone-500">{item.date} · {item.document} · {item.id}</p></TableCell><TableCell className="px-3 py-4"><span className={item.origin.includes("Pendiente") ? "rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "text-stone-600 dark:text-stone-300"}>{item.origin}</span></TableCell><TableCell className="px-3 py-4 text-right tabular-nums">{currency.format(item.base)}</TableCell><TableCell className="px-5 py-4 text-right font-medium tabular-nums">{currency.format(item.credit)}</TableCell></TableRow>)}</TableBody></Table></div></div><aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Selección del borrador</p><p className="mt-1 text-sm text-stone-500">La selección se registra junto a la declaración, no modifica las compras de origen.</p><div className="mt-5 space-y-3 border-y border-stone-100 py-4 text-sm dark:border-stone-800"><Line label="Crédito seleccionado" value={currency.format(selectedCredit)} />{hasMixedSales && <Line label="Crédito aplicable" value={currency.format(usableCredit)} detail="Según prorrateo" />}<Line label={netBalance > 0 ? "Impuesto estimado a pagar" : "Crédito fiscal a favor"} value={currency.format(Math.abs(netBalance))} detail="Cambia al seleccionar compras" /></div><button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#14352d] px-3 py-2.5 text-sm font-medium text-white hover:bg-[#0e2821]" onClick={() => setTab("resumen")} type="button"><Check size={16} /> Actualizar determinación</button></aside></section>}
-      {tab === "retenciones" && <section className="mt-6 grid gap-6 2xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
-          <div className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between">
-            <div><h2 className="font-semibold">Retenciones de IVA disponibles</h2><p className="mt-1 text-sm text-stone-500">Solo pueden seleccionarse comprobantes del período que no estén vinculados a otra declaración.</p></div>
-            <span className="text-sm font-medium text-[#14352d] dark:text-emerald-200">{selectedRetentions.size} seleccionada{selectedRetentions.size === 1 ? "" : "s"}</span>
-          </div>
-          <div className="overflow-x-auto">
-            <Table className="min-w-[980px] w-full text-left text-sm">
-              <TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="w-12 px-5 py-3" /><TableHead className="px-3 py-3">Comprobante / cliente</TableHead><TableHead className="px-3 py-3">Factura</TableHead><TableHead className="px-3 py-3">Período de origen</TableHead><TableHead className="px-3 py-3 text-right">% del IVA</TableHead><TableHead className="px-3 py-3 text-right">Monto retenido</TableHead><TableHead className="px-5 py-3">Estado</TableHead></TableRow></TableHeader>
-              <TableBody className="divide-y divide-stone-100 dark:divide-stone-800">
-                {receivedIvaRetentions.map((item) => {
-                  const applied = item.status === "Aplicada";
-                  const chosen = selectedRetentions.has(item.id);
-                  return (
-                    <TableRow className={chosen ? "bg-emerald-50/40 dark:bg-emerald-950/15" : applied ? "bg-stone-50/60 text-stone-500 dark:bg-stone-900/40" : ""} key={item.id}>
-                      <TableCell className="px-5 py-4"><input aria-label={`Incluir ${item.receipt}`} checked={chosen} className="size-4 accent-[#14352d]" disabled={applied} onChange={() => toggleRetention(item.id)} type="checkbox" /></TableCell>
-                      <TableCell className="px-3 py-4"><p className="font-medium">{item.receipt}</p><p className="mt-0.5 text-xs text-stone-500">{item.customer} · {item.date}</p></TableCell>
-                      <TableCell className="px-3 py-4"><p className="font-medium">{item.invoice}</p><p className="mt-0.5 text-xs text-stone-500">IVA factura {currency.format(item.invoiceVat)}</p></TableCell>
-                      <TableCell className="px-3 py-4">{item.originPeriod}</TableCell>
-                      <TableCell className="px-3 py-4 text-right tabular-nums">{item.percentage} %</TableCell>
-                      <TableCell className="px-3 py-4 text-right font-semibold tabular-nums">{currency.format(item.amount)}</TableCell>
-                      <TableCell className="px-5 py-4">{applied ? <div><span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 dark:bg-violet-950 dark:text-violet-300"><LockKeyhole size={13} /> Aplicada</span><p className="mt-1 text-[11px] text-stone-500">{item.appliedTo}</p></div> : <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"><CircleCheck size={13} /> Disponible</span>}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-        <aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900">
-          <div className="flex items-start gap-3"><div className="grid size-9 place-items-center rounded-lg bg-[#e7f0e9] text-[#14352d] dark:bg-emerald-950 dark:text-emerald-200"><ShieldCheck size={18} /></div><div><p className="font-semibold">Aplicación en el borrador</p><p className="mt-1 text-sm text-stone-500">Junio 2026</p></div></div>
-          <div className="mt-5 space-y-3 border-y border-stone-100 py-4 text-sm dark:border-stone-800"><Line label="Comprobantes disponibles" value={String(availableRetentions.length)} /><Line label="Seleccionados" value={String(selectedRetentions.size)} /><Line label="Total a descontar" value={currency.format(retainedIvaOnSales)} /></div>
-          <button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#14352d] px-3 py-2.5 text-sm font-medium text-white hover:bg-[#0e2821]" onClick={() => setTab("resumen")} type="button"><Check size={16} /> Actualizar determinación</button>
-          <p className="mt-3 text-xs leading-5 text-stone-500">Al cerrar la declaración, estas retenciones deben quedar bloqueadas y vinculadas al expediente para impedir su reutilización.</p>
-        </aside>
-      </section>}
-      {tab === "libros" && <section className="mt-6 space-y-5"><div className="grid gap-4 lg:grid-cols-2"><Book title="Libro de ventas" icon={ReceiptText} rows={[`${sales[0].documents} documentos gravados`, `${sales[1].documents} documentos exentos`, `Base total ${currency.format(totalSales)}`]} value={currency.format(debit)} action={bookPreview === "sales" ? "Preliminar abierto" : "Generar preliminar"} onAction={() => setBookPreview("sales")} /><Book title="Libro de compras" icon={BookOpenCheck} rows={[`${selectedPurchases.length} compras seleccionadas`, `Crédito seleccionado ${currency.format(selectedCredit)}`, `Crédito aplicable ${currency.format(usableCredit)}`]} value={currency.format(usableCredit)} action={bookPreview === "purchases" ? "Preliminar abierto" : "Generar preliminar"} onAction={() => setBookPreview("purchases")} /></div>{bookPreview && <BookPreview kind={bookPreview} purchases={selectedPurchases} retainedIva={retainedIvaOnSales} />}</section>}
-      {tab === "cierre" && <section className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]"><div className="rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="border-b border-stone-100 p-5 dark:border-stone-800"><h2 className="font-semibold">Presentación y cierre</h2><p className="mt-1 text-sm text-stone-500">La presentación se realiza manualmente en SENIAT. Registra el resultado y conserva declaración, certificado y, cuando aplique, planilla y soportes de pago.</p></div><div className="grid gap-4 p-5 sm:grid-cols-2"><label className="text-sm font-medium">Fecha de declaración<DatePicker
-        className="field mt-1.5"
-        onChange={(event) => setDeclaredOn(event.target.value)}
-        value={declaredOn} /></label><label className="text-sm font-medium">Monto a pagar<Input className="field mt-1.5" min="0" onChange={(event) => setDeclaredAmount(event.target.value === "" ? null : Number(event.target.value))} step="0.01" type="number" value={declaredAmount ?? calculatedPayable} /></label></div><div className="space-y-3 border-t border-stone-100 p-5 dark:border-stone-800">{visibleEvidences.map((item) => <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-stone-300 p-3 hover:border-[#14352d] hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800" key={item.key} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); attach(item.key, event.dataTransfer.files[0]); }}><div className={`grid size-9 shrink-0 place-items-center rounded-lg ${item.status === "Adjunto" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-stone-100 text-stone-500 dark:bg-stone-800"}`}>{item.status === "Adjunto" ? <CircleCheck size={18} /> : <UploadCloud size={18} />}</div><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{item.label}{item.required && <span className="text-rose-600"> *</span>}</span><span className="mt-0.5 block text-xs text-stone-500">{item.status === "Adjunto" ? "Archivo cargado en el expediente" : item.detail}</span></span><Paperclip size={16} className="text-stone-400" /><AttachmentInput
-        className="sr-only"
-        onChange={(event) => attach(item.key, event.target.files?.[0])} /></label>)}{!paymentRequired && <div className="rounded-lg bg-stone-50 px-3 py-3 text-sm text-stone-600 dark:bg-stone-800 dark:text-stone-300"><Info className="mr-1 inline text-stone-400" size={15} /> Como el monto a pagar es cero, no se requieren planilla ni comprobante de pago.</div>}</div></div><aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex items-start gap-3"><div className="grid size-9 place-items-center rounded-lg bg-[#e7f0e9] text-[#14352d] dark:bg-emerald-950 dark:text-emerald-200"><ShieldCheck size={18} /></div><div><p className="font-semibold">Cierre del expediente</p><p className="mt-1 text-sm text-stone-500">Monto informado: {currency.format(amountToPay)}</p></div></div><div className="mt-5 space-y-3 text-sm"><CheckLine label="Revisión interna aprobada" done={reviewed} /><CheckLine label="Fecha de declaración registrada" done={Boolean(declaredOn)} /><CheckLine label="Certificado de declaración adjunto" done={evidenceAttached("certificate")} /><CheckLine label="Declaración presentada adjunta" done={evidenceAttached("declaration")} />{paymentRequired && <><CheckLine label="Planilla de pago adjunta" done={evidenceAttached("payment-plan")} /><CheckLine label="Comprobante de pago adjunto" done={evidenceAttached("payment-receipt")} /></>}</div><button className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#14352d] px-3 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={!reviewed || !declaredOn || !allEvidenceReady} type="button"><Send size={16} /> Cerrar declaración</button><p className="mt-3 text-xs leading-5 text-stone-500">Declaración y certificado son obligatorios; la planilla y el comprobante de pago solo si existe monto a pagar.</p></aside></section>}
+      <div className="flex flex-col gap-5 border-b border-stone-200 pb-6 dark:border-stone-800 lg:flex-row lg:items-end lg:justify-between">
+        <div><Link className="inline-flex items-center gap-1 text-sm text-stone-500 hover:text-[#14352d] dark:hover:text-emerald-200" href="/declaraciones"><ArrowLeft size={15} /> Declaraciones</Link><div className="mt-4 flex flex-wrap items-center gap-2"><p className="text-sm text-stone-500">IVA / {data.declaration.periodLabel}</p><StatusBadge status={data.declaration.status} /></div><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Determinación de IVA</h1><p className="mt-2 text-sm text-stone-600 dark:text-stone-300">{data.company.legalName} · RIF {data.company.rif}</p></div>
+        {!closed && <div className="flex flex-wrap gap-2"><Button disabled={!data.canManage || saving} onClick={() => void mutate("save")} variant="outline">{saving ? <LoaderCircle className="animate-spin" /> : <Save />} Guardar borrador</Button><Button className="bg-[#14352d] text-white hover:bg-[#0e2821]" disabled={!data.canManage || saving} onClick={() => void mutate("review")}><Check /> Listo para revisión</Button></div>}
+      </div>
+
+      {(error || message) && <div aria-live="polite" className={`mt-5 flex items-start gap-2 rounded-xl border p-3 text-sm ${error ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950" : "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950"}`}>{error ? <AlertCircle className="mt-0.5 shrink-0" size={16} /> : <CircleCheck className="mt-0.5 shrink-0" size={16} />}{error || message}</div>}
+      {closed && <div className="mt-5 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-100"><LockKeyhole className="mt-0.5 shrink-0" size={18} /><div><p className="font-semibold">Declaración presentada</p><p className="mt-1 text-emerald-800 dark:text-emerald-200">Las facturas, retenciones, saldos y evidencias quedan disponibles en modo consulta. Si hay monto por pagar, continúa en Compromisos.</p><Link className="mt-3 inline-flex font-semibold underline underline-offset-2" href="/compromisos-de-pago">Ver compromiso de pago</Link></div></div>}
+
+      <div className="mt-5 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900 md:grid-cols-4"><Workflow number="1" label="Ventas consolidadas" detail={`${data.sales.length} documentos del período`} done /><Workflow number="2" label="Créditos seleccionados" detail={`${selectedPurchases.size} compras · ${selectedRetentions.size} retenciones`} done={selectedPurchases.size > 0 || selectedRetentions.size > 0} /><Workflow number="3" label="Revisión interna" detail={data.declaration.status === "READY_FOR_REVIEW" ? "Lista para presentar" : closed ? "Revisión completada" : "Pendiente"} done={data.declaration.status === "READY_FOR_REVIEW" || closed} /><Workflow number="4" label="Presentación y cierre" detail={closed ? `Presentada ${displayDate(data.declaration.filedAt)}` : "Pendiente de SENIAT"} done={closed} /></div>
+
+      <nav className="mt-6 flex gap-1 overflow-x-auto border-b border-stone-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-stone-800" aria-label="Secciones de la declaración">{[["determination", "Determinación"], ["sales", `Ventas (${data.sales.length})`], ["purchases", `Compras (${data.purchases.length})`], ["retentions", `Retenciones (${data.retentions.length})`], ["books", "Libros fiscales"], ["closing", "Presentación y cierre"]].map(([id, label]) => <button className={`shrink-0 border-b-2 px-3 py-3 text-sm font-medium ${tab === id ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"}`} key={id} onClick={() => setTab(id as typeof tab)} type="button">{label}</button>)}</nav>
+
+      {tab === "determination" && <Determination data={data} onGo={setTab} totals={totals} />}
+      {tab === "sales" && <SalesTab sales={data.sales} totals={totals} />}
+      {tab === "purchases" && <PurchasesTab closed={closed} data={data} selected={selectedPurchases} setSelected={setSelectedPurchases} toggle={(id) => toggle(setSelectedPurchases, id)} totals={totals} allSelected={allPurchasesSelected} />}
+      {tab === "retentions" && <RetentionsTab closed={closed} data={data} selected={selectedRetentions} setSelected={setSelectedRetentions} toggle={(id) => toggle(setSelectedRetentions, id)} totals={totals} allSelected={allRetentionsSelected} />}
+      {tab === "books" && <BooksTab closed={closed} data={data} selectedPurchases={selectedPurchases} />}
+      {tab === "closing" && <ClosingTab closed={closed} confirmDifference={confirmDifference} data={data} declaredAmount={declaredAmount} filedAt={filedAt} hasDifference={hasDifference} onAmount={setDeclaredAmount} onConfirmDifference={setConfirmDifference} onDate={setFiledAt} onUpload={uploadEvidence} onClose={() => void mutate("close")} saving={saving} totals={totals} uploading={uploading} />}
     </div>
   );
 }
 
-function Workflow({ number, label, detail, done = false, active = false }: { number: string; label: string; detail: string; done?: boolean; active?: boolean }) { return <div className="flex items-center gap-3"><div className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold ${done ? "bg-emerald-600 text-white" : active ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-stone-100 text-stone-500 dark:bg-stone-800"}`}>{done ? <Check size={16} /> : number}</div><div><p className="text-sm font-medium">{label}</p><p className="text-xs text-stone-500">{detail}</p></div></div>; }
-function Metric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: "stone" | "sky" | "violet" | "emerald" }) { const styles = { stone: "border-stone-200", sky: "border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20", violet: "border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/20", emerald: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20" }; return <div className={`rounded-xl border p-4 ${styles[tone]}`}><p className="text-sm text-stone-500">{label}</p><p className="mt-2 text-xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-stone-500">{detail}</p></div>; }
-function Line({ label, value, detail }: { label: string; value: string; detail?: string }) { return <div className="flex items-start justify-between gap-4 py-3 text-sm"><div><p>{label}</p>{detail && <p className="mt-0.5 text-xs text-stone-500">{detail}</p>}</div><p className="shrink-0 font-medium tabular-nums">{value}</p></div>; }
-function Notice({ text }: { text: string }) { return <section className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"><div className="flex gap-3"><Info className="mt-0.5 shrink-0" size={17} /><p className="leading-5">{text}</p></div></section>; }
-function AuditCard({ reviewed, selected, mixed }: { reviewed: boolean; selected: number; mixed: boolean }) { return <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex items-start gap-3"><div className="grid size-9 place-items-center rounded-lg bg-[#e7f0e9] text-[#14352d] dark:bg-emerald-950 dark:text-emerald-200"><FileCheck2 size={18} /></div><div><p className="font-semibold">Control de revisión</p><p className="mt-1 text-sm text-stone-500">El borrador conserva todas sus decisiones.</p></div></div><div className="mt-5 space-y-3 text-sm"><CheckLine label="Ventas del período consolidadas" done /><CheckLine label={`${selected} compras seleccionadas con origen`} done={selected > 0} />{mixed && <CheckLine label="Regla de prorrateo identificada" done />}<CheckLine label="Revisión del responsable" done={reviewed} /></div></section>; }
-function CheckLine({ label, done }: { label: string; done: boolean }) { return <div className="flex items-center gap-2"><span className={`grid size-4 place-items-center rounded-full ${done ? "bg-emerald-500 text-white" : "bg-stone-200 text-stone-400 dark:bg-stone-700"}`}>{done ? <Check size={11} strokeWidth={3} /> : null}</span><span className={done ? "text-stone-700 dark:text-stone-200" : "text-stone-500"}>{label}</span></div>; }
-function Book({ title, icon: Icon, rows, value, action, onAction }: { title: string; icon: typeof ReceiptText; rows: string[]; value: string; action: string; onAction: () => void }) { return <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex items-start justify-between"><div className="grid size-10 place-items-center rounded-lg bg-[#e7f0e9] text-[#14352d] dark:bg-emerald-950 dark:text-emerald-200"><Icon size={19} /></div><FileSpreadsheet size={18} className="text-stone-400" /></div><h2 className="mt-4 font-semibold">{title}</h2><div className="mt-3 space-y-1.5 text-sm text-stone-500">{rows.map((row) => <p key={row}>{row}</p>)}</div><div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-4 dark:border-stone-800"><p className="font-semibold">{value}</p><button className="inline-flex items-center gap-1 text-sm font-medium text-[#14352d] hover:underline dark:text-emerald-200" onClick={onAction} type="button">{action} <ExternalLink size={14} /></button></div></section>; }
-function BookPreview({ kind, purchases, retainedIva }: { kind: "sales" | "purchases"; purchases: Purchase[]; retainedIva: number }) {
-  const isSales = kind === "sales";
-  return <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold">Preliminar · Libro de {isSales ? "ventas" : "compras"}</h2><p className="mt-1 text-sm text-stone-500">Vista previa; la generación del archivo definitivo se configurará posteriormente.</p></div><button className="inline-flex h-9 items-center gap-2 rounded-lg border border-stone-200 px-3 text-sm font-medium hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800" type="button"><Download size={16} /> Descargar cuando esté habilitado</button></div><div className="overflow-x-auto">{isSales ? <Table className="min-w-full text-left text-sm"><TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="px-5 py-3">Documento</TableHead><TableHead className="px-3 py-3">Operación</TableHead><TableHead className="px-3 py-3 text-right">Base imponible</TableHead><TableHead className="px-3 py-3 text-right">IVA</TableHead><TableHead className="px-5 py-3 text-right">Retenciones de IVA aplicadas</TableHead></TableRow></TableHeader><TableBody className="divide-y divide-stone-100 dark:divide-stone-800">{sales.map((item, index) => <TableRow key={item.label}><TableCell className="px-5 py-3.5">{item.documents} documentos</TableCell><TableCell className="px-3 py-3.5">{item.label}</TableCell><TableCell className="px-3 py-3.5 text-right tabular-nums">{currency.format(item.base)}</TableCell><TableCell className="px-3 py-3.5 text-right tabular-nums">{currency.format(item.debit)}</TableCell><TableCell className="px-5 py-3.5 text-right tabular-nums">{index === 0 ? currency.format(retainedIva) : currency.format(0)}</TableCell></TableRow>)}</TableBody></Table> : <Table className="min-w-full text-left text-sm"><TableHeader className="bg-stone-50 text-xs font-medium text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="px-5 py-3">Fecha</TableHead><TableHead className="px-3 py-3">Cliente / proveedor</TableHead><TableHead className="px-3 py-3">Documento</TableHead><TableHead className="px-3 py-3 text-right">Total</TableHead><TableHead className="px-3 py-3 text-right">Exento</TableHead><TableHead className="px-3 py-3 text-right">Exonerado</TableHead><TableHead className="px-3 py-3 text-right">Sin derecho</TableHead><TableHead className="px-3 py-3 text-right">Base imponible</TableHead><TableHead className="px-5 py-3 text-right">IVA</TableHead></TableRow></TableHeader><TableBody className="divide-y divide-stone-100 dark:divide-stone-800">{purchases.map((item) => <TableRow key={item.id}><TableCell className="px-5 py-3.5">{item.date}</TableCell><TableCell className="px-3 py-3.5">{item.supplier}</TableCell><TableCell className="px-3 py-3.5">{item.document}</TableCell><TableCell className="px-3 py-3.5 text-right tabular-nums">{currency.format(item.base + item.credit)}</TableCell><TableCell className="px-3 py-3.5 text-right tabular-nums">{currency.format(0)}</TableCell><TableCell className="px-3 py-3.5 text-right tabular-nums">{currency.format(0)}</TableCell><TableCell className="px-3 py-3.5 text-right tabular-nums">{currency.format(0)}</TableCell><TableCell className="px-3 py-3.5 text-right tabular-nums">{currency.format(item.base)}</TableCell><TableCell className="px-5 py-3.5 text-right tabular-nums">{currency.format(item.credit)}</TableCell></TableRow>)}</TableBody></Table>}</div></section>;
+type Totals = ReturnType<typeof calculate>;
+
+function Determination({ data, totals, onGo }: { data: Workspace; totals: Totals; onGo: (tab: "purchases" | "retentions" | "closing") => void }) {
+  return <section className="mt-6 space-y-5">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={TrendingUp} label="Débito fiscal" value={money.format(totals.debitTax)} detail={`${data.sales.length} ventas del período`} tone="stone" /><Metric icon={ShoppingCart} label="Crédito deducible" value={money.format(totals.deductibleTaxCredit)} detail={totals.prorationFactor === null ? `${totals.purchaseTaxCredit ? "Sin prorrateo" : "Sin compras seleccionadas"}` : `Prorrateado a ${number.format(totals.prorationFactor * 100)} %`} tone="sky" /><Metric icon={ShieldCheck} label="Retenciones disponibles" value={money.format(totals.retentionCreditsAvailable)} detail="Actuales más saldo anterior" tone="violet" /><Metric icon={Calculator} label="Resultado a pagar" value={money.format(totals.taxPayable)} detail={totals.taxPayable > 0 ? "Antes de presentación" : "Sin impuesto a pagar"} tone="emerald" /></div>
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="border-b border-stone-100 p-5 dark:border-stone-800"><h2 className="font-semibold">Secuencia de determinación</h2><p className="mt-1 text-sm text-stone-500">Separa la actividad del período, los saldos recibidos y lo que se trasladará al siguiente expediente.</p></header><div className="space-y-0 px-5">
+        <GroupTitle number="1" title="Actividad del período" /><Line label="Débito fiscal de ventas gravadas" value={money.format(totals.debitTax)} detail={`Base gravada ${money.format(totals.taxableBase)}`} /><Line label="Crédito fiscal de compras seleccionadas" value={`(${money.format(totals.purchaseTaxCredit)})`} />{totals.prorationFactor !== null && <><Line label="Factor de prorrateo" value={`${number.format(totals.prorationFactor * 100)} %`} detail="Ventas gravadas ÷ ventas gravadas y exentas" /><Line label="Crédito fiscal deducible" value={`(${money.format(totals.deductibleTaxCredit)})`} /></>}
+        <GroupTitle number="2" title="Saldos a favor recibidos" /><Line label="Crédito fiscal de períodos anteriores" value={`(${money.format(totals.previousFiscalCredit)})`} detail="Resultado cerrado del período anterior" /><Line label="Retenciones acumuladas anteriores" value={`(${money.format(totals.previousRetentionCredit)})`} detail="Saldo no consumido en la declaración anterior" /><Line label="Retenciones seleccionadas en este expediente" value={`(${money.format(totals.currentRetentionCredit)})`} detail="Solo se consumirán al cerrar" />
+        <GroupTitle number="3" title="Resultado de esta declaración" /><Line strong label="Impuesto determinado a pagar" value={money.format(totals.taxPayable)} /><Line label="Crédito fiscal para el próximo período" value={money.format(totals.fiscalCreditCarryforward)} detail="Se trasladará al cerrar" /><Line label="Retenciones para el próximo período" value={money.format(totals.retentionCreditCarryforward)} detail="Se trasladarán al cerrar" />
+      </div></section>
+      <aside className="space-y-4"><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Composición de ventas</p><div className="mt-4 space-y-3"><Progress label="Gravadas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.taxableBase} tone="emerald" /><Progress label="Exentas / exoneradas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.exemptAmount} tone="amber" /><Progress label="No sujetas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.nonTaxableAmount} tone="stone" /></div>{totals.prorationFactor !== null && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Hay operaciones gravadas y exentas. La plantilla aplica prorrateo al crédito de compras; valida la fuente y vigencia antes del cierre.</p>}</section><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Continuar el expediente</p><div className="mt-3 grid gap-2"><Button className="justify-between" onClick={() => onGo("purchases")} variant="outline">Revisar compras <ShoppingCart /></Button><Button className="justify-between" onClick={() => onGo("retentions")} variant="outline">Revisar retenciones <ShieldCheck /></Button><Button className="justify-between" onClick={() => onGo("closing")} variant="outline">Registrar presentación <FileCheck2 /></Button></div></section><section className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs leading-5 text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"><p className="font-semibold">Regla aplicada · versión {data.case.ruleVersion}</p><p className="mt-1">{data.case.source || "La configuración no tiene una fuente visible en este expediente. Valídala antes de presentar."}</p></section></aside>
+    </div>
+    <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="border-b border-stone-100 p-5 dark:border-stone-800"><h2 className="font-semibold">Correspondencia con la Forma IVA 99030</h2><p className="mt-1 text-sm text-stone-500">Lectura operativa basada en la planilla SENIAT aportada. Los números permiten conciliar la determinación antes de presentar.</p></header><div className="grid sm:grid-cols-2 lg:grid-cols-4"><FormItem item="49" label="Total débitos fiscales" value={totals.debitTax} /><FormItem item="39" label="Total créditos fiscales" value={totals.fiscalCreditsAvailable} /><FormItem item="53" label="Cuota tributaria" value={totals.taxBeforeRetentions} /><FormItem item="60" label="Excedente fiscal siguiente" value={totals.fiscalCreditCarryforward} /><FormItem item="74" label="Total retenciones" value={totals.retentionCreditsAvailable} /><FormItem item="55" label="Retenciones descontadas" value={Math.min(totals.taxBeforeRetentions, totals.retentionCreditsAvailable)} /><FormItem item="67" label="Retenciones no aplicadas" value={totals.retentionCreditCarryforward} /><FormItem item="90" label="Total a pagar" value={totals.taxPayable} strong /></div></section>
+  </section>;
 }
+
+function SalesTab({ sales, totals }: { sales: Sale[]; totals: Totals }) {
+  return <section className="mt-6 overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold">Ventas del período de imposición</h2><p className="mt-1 text-sm text-stone-500">Todas las ventas registradas en el período se consolidan automáticamente en la determinación.</p></div><div className="text-right"><p className="text-xs text-stone-500">Débito fiscal</p><p className="mt-1 font-semibold text-[#14352d] dark:text-emerald-200">{money.format(totals.debitTax)}</p></div></header><div className="overflow-x-auto"><Table className="min-w-[920px]"><TableHeader className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="px-5">Cliente / documento</TableHead><TableHead>Fecha</TableHead><TableHead className="text-right">Gravada</TableHead><TableHead className="text-right">Exenta</TableHead><TableHead className="text-right">No sujeta</TableHead><TableHead className="text-right">IVA</TableHead><TableHead className="px-5 text-right">Total</TableHead></TableRow></TableHeader><TableBody>{sales.map((item) => <TableRow key={item.id}><TableCell className="px-5"><p className="font-medium">{item.customer}</p><p className="text-xs text-stone-500">{item.documentNumber} · {item.rif || "Sin RIF"}</p></TableCell><TableCell>{displayDate(item.date)}</TableCell><TableCell className="text-right tabular-nums">{money.format(amount(item.taxableBase))}</TableCell><TableCell className="text-right tabular-nums">{money.format(amount(item.exemptAmount))}</TableCell><TableCell className="text-right tabular-nums">{money.format(amount(item.nonTaxableAmount))}</TableCell><TableCell className="text-right font-medium tabular-nums">{money.format(amount(item.taxAmount))}</TableCell><TableCell className="px-5 text-right tabular-nums">{money.format(amount(item.totalAmount))}</TableCell></TableRow>)}{sales.length === 0 && <TableRow><TableCell className="py-12 text-center text-stone-500" colSpan={7}>No hay ventas registradas para este período. La declaración se tratará sin actividad comercial mientras no se carguen documentos.</TableCell></TableRow>}</TableBody></Table></div></section>;
+}
+
+function PurchasesTab({ closed, data, selected, setSelected, toggle, totals, allSelected }: { closed: boolean; data: Workspace; selected: Set<string>; setSelected: React.Dispatch<React.SetStateAction<Set<string>>>; toggle: (id: string) => void; totals: Totals; allSelected: boolean }) {
+  return <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"><div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold">Compras disponibles para aprovechar</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">Solo aparecen compras registradas, no utilizadas en otra declaración y dentro de la ventana operativa configurada de 12 meses.</p></div>{!closed && data.purchases.length > 0 && <Button onClick={() => setSelected(allSelected ? new Set() : new Set(data.purchases.map(({ id }) => id)))} size="sm" variant="outline">{allSelected ? "Desmarcar todas" : "Marcar todas"}</Button>}</header><div className="overflow-x-auto"><Table className="min-w-[820px]"><TableHeader className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="w-12 px-5"><input aria-label="Seleccionar todas las compras" checked={allSelected} disabled={closed || !data.purchases.length} onChange={() => setSelected(allSelected ? new Set() : new Set(data.purchases.map(({ id }) => id)))} type="checkbox" /></TableHead><TableHead>Proveedor / documento</TableHead><TableHead>Origen</TableHead><TableHead className="text-right">Base</TableHead><TableHead className="text-right">IVA</TableHead><TableHead className="px-5 text-right">Total</TableHead></TableRow></TableHeader><TableBody>{data.purchases.map((item) => <TableRow className={selected.has(item.id) ? "bg-emerald-50/40 dark:bg-emerald-950/15" : ""} key={item.id}><TableCell className="px-5"><input aria-label={`Aprovechar compra ${item.documentNumber}`} checked={selected.has(item.id)} disabled={closed} onChange={() => toggle(item.id)} type="checkbox" /></TableCell><TableCell><p className="font-medium">{item.supplier}</p><p className="text-xs text-stone-500">{item.documentNumber} · {item.rif || "Sin RIF"}</p></TableCell><TableCell><p>{displayDate(item.date)}</p><p className="text-xs text-stone-500">Período {item.originPeriod}</p></TableCell><TableCell className="text-right tabular-nums">{money.format(amount(item.taxableBase))}</TableCell><TableCell className="text-right font-medium tabular-nums">{money.format(amount(item.taxAmount))}</TableCell><TableCell className="px-5 text-right tabular-nums">{money.format(amount(item.totalAmount))}</TableCell></TableRow>)}{data.purchases.length === 0 && <TableRow><TableCell className="py-12 text-center text-stone-500" colSpan={6}>No hay compras con crédito fiscal disponible para este período.</TableCell></TableRow>}</TableBody></Table></div></div><aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Crédito de compras</p><p className="mt-1 text-sm text-stone-500">{selected.size} de {data.purchases.length} compras incluidas</p><div className="mt-4 border-y border-stone-100 py-2 dark:border-stone-800"><Line label="Crédito seleccionado" value={money.format(totals.purchaseTaxCredit)} /><Line label="Crédito deducible" value={money.format(totals.deductibleTaxCredit)} detail={totals.prorationFactor === null ? "Sin prorrateo" : `Factor ${number.format(totals.prorationFactor * 100)} %`} /></div><p className="mt-4 text-xs leading-5 text-stone-500">La selección se reserva en este borrador. Al cerrar, las compras quedan marcadas como aprovechadas y dejan de aparecer en períodos futuros.</p></aside></section>;
+}
+
+function RetentionsTab({ closed, data, selected, setSelected, toggle, totals, allSelected }: { closed: boolean; data: Workspace; selected: Set<string>; setSelected: React.Dispatch<React.SetStateAction<Set<string>>>; toggle: (id: string) => void; totals: Totals; allSelected: boolean }) {
+  return <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"><div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold">Retenciones de IVA recibidas</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">Retenciones cargadas en facturas de venta y aún no consumidas. Puedes reservarlas ahora o dejarlas disponibles para otro período.</p></div>{!closed && data.retentions.length > 0 && <Button onClick={() => setSelected(allSelected ? new Set() : new Set(data.retentions.map(({ id }) => id)))} size="sm" variant="outline">{allSelected ? "Desmarcar todas" : "Marcar todas"}</Button>}</header><div className="overflow-x-auto"><Table className="min-w-[920px]"><TableHeader className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="w-12 px-5"><input aria-label="Seleccionar todas las retenciones" checked={allSelected} disabled={closed || !data.retentions.length} onChange={() => setSelected(allSelected ? new Set() : new Set(data.retentions.map(({ id }) => id)))} type="checkbox" /></TableHead><TableHead>Cliente / factura</TableHead><TableHead>Comprobante</TableHead><TableHead>Soporte</TableHead><TableHead className="text-right">%</TableHead><TableHead className="px-5 text-right">Retenido</TableHead></TableRow></TableHeader><TableBody>{data.retentions.map((item) => <TableRow className={selected.has(item.id) ? "bg-violet-50/40 dark:bg-violet-950/15" : ""} key={item.id}><TableCell className="px-5"><input aria-label={`Aplicar retención ${item.receiptNumber}`} checked={selected.has(item.id)} disabled={closed} onChange={() => toggle(item.id)} type="checkbox" /></TableCell><TableCell><p className="font-medium">{item.customer}</p><p className="text-xs text-stone-500">Factura {item.invoiceNumber} · {item.rif || "Sin RIF"}</p></TableCell><TableCell><p className="font-medium">{item.receiptNumber}</p><p className="text-xs text-stone-500">{displayDate(item.date)}</p></TableCell><TableCell>{item.voucher ? <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"><BadgeCheck size={14} /> Comprobante cargado</span> : <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300"><FileClock size={14} /> Sin comprobante</span>}</TableCell><TableCell className="text-right tabular-nums">{item.percentage ? `${number.format(amount(item.percentage))} %` : "—"}</TableCell><TableCell className="px-5 text-right font-medium tabular-nums">{money.format(amount(item.amount))}</TableCell></TableRow>)}{data.retentions.length === 0 && <TableRow><TableCell className="py-12 text-center text-stone-500" colSpan={6}>No hay retenciones de IVA disponibles.</TableCell></TableRow>}</TableBody></Table></div></div><aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Retenciones aplicadas</p><p className="mt-1 text-sm text-stone-500">{selected.size} de {data.retentions.length} seleccionadas</p><div className="mt-4 border-y border-stone-100 py-2 dark:border-stone-800"><Line label="Saldo anterior" value={money.format(totals.previousRetentionCredit)} /><Line label="Selección actual" value={money.format(totals.currentRetentionCredit)} /><Line label="Disponible total" value={money.format(totals.retentionCreditsAvailable)} /></div><p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Puedes guardar una retención sin comprobante en el borrador, pero el cierre exigirá el soporte para aprovecharla.</p></aside></section>;
+}
+
+function BooksTab({ closed, data, selectedPurchases }: { closed: boolean; data: Workspace; selectedPurchases: Set<string> }) {
+  const [book, setBook] = useState<"SALES" | "PURCHASES">("SALES");
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  const [downloadError, setDownloadError] = useState("");
+  const snapshot = useMemo(() => closed && data.fiscalBookSnapshot ? data.fiscalBookSnapshot : buildIvaFiscalBookSnapshot({
+    generatedAt: data.declaration.determinedAt ?? new Date().toISOString(),
+    period: data.declaration.period,
+    periodLabel: data.declaration.periodLabel,
+    company: {
+      legalName: data.company.legalName,
+      rif: data.company.rif,
+      fiscalAddress: data.company.fiscalAddress ?? "",
+    },
+    source: { ruleSource: data.case.source, ruleVersion: data.case.ruleVersion },
+    sales: data.sales.map((item) => ({
+      id: item.id,
+      date: item.date,
+      partyName: item.customer,
+      rif: item.rif,
+      documentNumber: item.documentNumber,
+      taxableBase: amount(item.taxableBase),
+      exemptAmount: amount(item.exemptAmount),
+      nonTaxableAmount: amount(item.nonTaxableAmount),
+      taxAmount: amount(item.taxAmount),
+      totalAmount: amount(item.totalAmount),
+      vatRate: amount(item.vatRate),
+      taxRateName: item.taxRateName,
+      retentions: item.retentions.map((retention) => ({
+        receiptNumber: retention.receiptNumber,
+        percentage: amount(retention.percentage),
+        amount: amount(retention.amount),
+      })),
+    })),
+    purchases: data.purchases.filter(({ id }) => selectedPurchases.has(id)).map((item) => ({
+      id: item.id,
+      date: item.date,
+      partyName: item.supplier,
+      rif: item.rif,
+      documentNumber: item.documentNumber,
+      taxableBase: amount(item.taxableBase),
+      exemptAmount: amount(item.exemptAmount),
+      nonTaxableAmount: amount(item.nonTaxableAmount),
+      taxAmount: amount(item.taxAmount),
+      totalAmount: amount(item.totalAmount),
+      vatRate: amount(item.vatRate),
+      taxRateName: item.taxRateName,
+      retentions: item.retentions.map((retention) => ({
+        receiptNumber: retention.receiptNumber,
+        percentage: amount(retention.percentage),
+        amount: amount(retention.amount),
+      })),
+    })),
+  }), [closed, data, selectedPurchases]);
+
+  async function download(format: "pdf" | "xlsx") {
+    setExporting(format);
+    setDownloadError("");
+    try {
+      const response = await fetch("/api/declarations/iva/books", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          period: data.declaration.period,
+          kind: book,
+          format,
+          selectedPurchaseIds: [...selectedPurchases],
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? "No fue posible generar el libro fiscal.");
+      }
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const fileName = disposition.match(/filename="([^"]+)"/)?.[1] ?? `libro-iva.${format}`;
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setDownloadError(reason instanceof Error ? reason.message : "No fue posible generar el libro fiscal.");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  const rows = book === "SALES" ? snapshot.sales : snapshot.purchases;
+  return <section className="mt-6 space-y-5">
+    <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
+      <header className="flex flex-col gap-4 border-b border-stone-100 p-5 dark:border-stone-800 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"><BookOpen size={18} /></span><div><h2 className="font-semibold">Vista preliminar de libros fiscales</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">{closed ? "Esta es la instantánea congelada al cerrar la declaración." : "Se actualiza con las ventas del período y las compras seleccionadas en la determinación."}</p></div></div>
+        <div className="flex flex-wrap gap-2"><Button disabled={exporting !== null} onClick={() => void download("pdf")} size="sm" variant="outline">{exporting === "pdf" ? <LoaderCircle className="animate-spin" /> : <FileText />} PDF</Button><Button disabled={exporting !== null} onClick={() => void download("xlsx")} size="sm" variant="outline">{exporting === "xlsx" ? <LoaderCircle className="animate-spin" /> : <FileSpreadsheet />} Excel</Button></div>
+      </header>
+      <div className="flex gap-1 border-b border-stone-100 px-5 pt-3 dark:border-stone-800"><button className={`border-b-2 px-3 py-2 text-sm font-medium ${book === "SALES" ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500"}`} onClick={() => setBook("SALES")} type="button">Libro de ventas ({snapshot.sales.length})</button><button className={`border-b-2 px-3 py-2 text-sm font-medium ${book === "PURCHASES" ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500"}`} onClick={() => setBook("PURCHASES")} type="button">Libro de compras ({snapshot.purchases.length})</button></div>
+      <div className="border-b border-stone-100 bg-stone-50 px-5 py-4 text-center dark:border-stone-800 dark:bg-stone-800/50"><p className="font-semibold">{data.company.legalName}</p><p className="mt-1 text-xs text-stone-500">RIF {data.company.rif} · {data.company.fiscalAddress || "Dirección fiscal no registrada"}</p><p className="mt-3 text-sm font-semibold">{book === "SALES" ? "LIBRO DE VENTAS" : "LIBRO DE COMPRAS"}</p><p className="mt-0.5 text-xs uppercase text-stone-500">Correspondiente a {data.declaration.periodLabel}</p></div>
+      {book === "SALES" ? <SalesBookPreview rows={snapshot.sales} /> : <PurchasesBookPreview rows={snapshot.purchases} />}
+      {!rows.length && <div className="border-t border-stone-100 p-8 text-center text-sm text-stone-500 dark:border-stone-800">No hay documentos incluidos en este libro.</div>}
+    </section>
+    {downloadError && <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950"><AlertCircle className="mt-0.5 shrink-0" size={16} />{downloadError}</div>}
+    <BookSummary snapshot={snapshot} />
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"><p className="font-semibold">Validaciones antes del cierre</p><ul className="mt-2 list-disc space-y-1 pl-5">{snapshot.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul><p className="mt-2">Referencia documental: {snapshot.source.model}. La fuente configurada para este expediente sigue siendo la regla v{snapshot.source.ruleVersion}: {snapshot.source.ruleSource || "sin fuente visible"}.</p></div>
+  </section>;
+}
+
+function SalesBookPreview({ rows }: { rows: ReturnType<typeof buildIvaFiscalBookSnapshot>["sales"] }) {
+  if (!rows.length) return null;
+  return <div className="overflow-x-auto"><Table className="min-w-[1900px]"><TableHeader className="bg-sky-100 text-[11px] text-stone-700 dark:bg-sky-950 dark:text-stone-200"><TableRow><TableHead className="px-4">N°</TableHead><TableHead>Fecha</TableHead><TableHead>RIF / comprador</TableHead><TableHead>Factura / control</TableHead><TableHead>Notas débito / crédito</TableHead><TableHead>Comprobante retención</TableHead><TableHead>Factura afectada</TableHead><TableHead className="text-right">Total con IVA</TableHead><TableHead className="text-right">Exentas</TableHead><TableHead className="text-right">Exoneradas</TableHead><TableHead className="text-right">No sujetas</TableHead><TableHead className="text-right">Exportación</TableHead><TableHead className="text-right">General base / % / IVA</TableHead><TableHead className="text-right">Reducida base / % / IVA</TableHead><TableHead>SPE</TableHead><TableHead className="px-4 text-right">Retención % / IVA</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.operation}><TableCell className="px-4">{row.operation}</TableCell><TableCell>{displayDate(row.date)}</TableCell><TableCell><p className="font-medium">{row.partyName}</p><p className="text-xs text-stone-500">{row.rif || "Sin RIF"}</p></TableCell><TableCell><p>{row.invoiceNumber || "—"}</p><p className="text-xs text-stone-500">Control {row.controlNumber || "—"}</p></TableCell><TableCell>{row.debitNoteNumber || "—"} / {row.creditNoteNumber || "—"}</TableCell><TableCell>{row.retentionReceiptNumber || "—"}</TableCell><TableCell>{row.affectedInvoiceNumber || "—"}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.totalAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.exemptAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.exoneratedAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.nonTaxableAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.exportSales.base)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.generalSales.base)} / {number.format(row.generalSales.rate)} % / {number.format(row.generalSales.tax)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.reducedSales.base)} / {number.format(row.reducedSales.rate)} % / {number.format(row.reducedSales.tax)}</TableCell><TableCell>{row.specialTaxpayer}</TableCell><TableCell className="px-4 text-right tabular-nums">{number.format(row.retentionPercentage)} % / {number.format(row.retainedVat)}</TableCell></TableRow>)}</TableBody></Table></div>;
+}
+
+function PurchasesBookPreview({ rows }: { rows: ReturnType<typeof buildIvaFiscalBookSnapshot>["purchases"] }) {
+  if (!rows.length) return null;
+  return <div className="overflow-x-auto"><Table className="min-w-[2200px]"><TableHeader className="bg-sky-100 text-[11px] text-stone-700 dark:bg-sky-950 dark:text-stone-200"><TableRow><TableHead className="px-4">N°</TableHead><TableHead>Fecha</TableHead><TableHead>RIF / proveedor</TableHead><TableHead>Factura</TableHead><TableHead>Notas débito / crédito</TableHead><TableHead>Planilla importación</TableHead><TableHead>Comprobante retención</TableHead><TableHead>Factura afectada</TableHead><TableHead className="text-right">Total con IVA</TableHead><TableHead className="text-right">Exentas</TableHead><TableHead className="text-right">Exoneradas</TableHead><TableHead className="text-right">No sujetas</TableHead><TableHead className="text-right">Sin derecho a crédito</TableHead><TableHead className="text-right">Importación general</TableHead><TableHead className="text-right">Importación reducida</TableHead><TableHead className="text-right">Nacional general base / % / IVA</TableHead><TableHead className="text-right">Nacional reducida base / % / IVA</TableHead><TableHead>SPE</TableHead><TableHead className="px-4 text-right">Retención % / IVA</TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.operation}><TableCell className="px-4">{row.operation}</TableCell><TableCell>{displayDate(row.date)}</TableCell><TableCell><p className="font-medium">{row.partyName}</p><p className="text-xs text-stone-500">{row.rif || "Sin RIF"}</p></TableCell><TableCell>{row.invoiceNumber || "—"}</TableCell><TableCell>{row.debitNoteNumber || "—"} / {row.creditNoteNumber || "—"}</TableCell><TableCell>{row.importFormNumber || "—"}</TableCell><TableCell>{row.retentionReceiptNumber || "—"}</TableCell><TableCell>{row.affectedInvoiceNumber || "—"}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.totalAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.exemptAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.exoneratedAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.nonTaxableAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.noCreditAmount)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.importGeneral.base)} / {number.format(row.importGeneral.tax)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.importReduced.base)} / {number.format(row.importReduced.tax)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.nationalGeneral.base)} / {number.format(row.nationalGeneral.rate)} % / {number.format(row.nationalGeneral.tax)}</TableCell><TableCell className="text-right tabular-nums">{number.format(row.nationalReduced.base)} / {number.format(row.nationalReduced.rate)} % / {number.format(row.nationalReduced.tax)}</TableCell><TableCell>{row.specialTaxpayer}</TableCell><TableCell className="px-4 text-right tabular-nums">{number.format(row.retentionPercentage)} % / {number.format(row.retainedVat)}</TableCell></TableRow>)}</TableBody></Table></div>;
+}
+
+function BookSummary({ snapshot }: { snapshot: ReturnType<typeof buildIvaFiscalBookSnapshot> }) {
+  const sales = snapshot.summary.sales;
+  const purchases = snapshot.summary.purchases;
+  const debitRows = [["Ventas gravadas · alícuota general", sales.general.base, sales.general.tax], ["Ventas gravadas · alícuota reducida", sales.reduced.base, sales.reduced.tax], ["Ventas gravadas · general más adicional", sales.additional.base, sales.additional.tax], ["Ventas internas no gravadas", sales.exemptAmount + sales.exoneratedAmount + sales.nonTaxableAmount, 0], ["Ventas de exportación", sales.exportAmount, 0], ["Total ventas y débitos fiscales", sales.totalBase, sales.totalDebit]] as const;
+  const creditRows = [["Compras no gravadas / sin derecho", purchases.noCreditAmount, 0], ["Compras nacionales exentas", purchases.exemptAmount, 0], ["Compras nacionales exoneradas", purchases.exoneratedAmount, 0], ["Compras nacionales no sujetas", purchases.nonTaxableAmount, 0], ["Compras nacionales · alícuota general", purchases.nationalGeneral.base, purchases.nationalGeneral.tax], ["Compras nacionales · alícuota reducida", purchases.nationalReduced.base, purchases.nationalReduced.tax], ["Total compras y créditos fiscales", purchases.totalBase, purchases.totalCredit]] as const;
+  return <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="bg-sky-100 px-5 py-3 text-center text-sm font-semibold dark:bg-sky-950">Resumen del período de imposición</header><div className="grid lg:grid-cols-2"><SummaryTable heading="Resumen de débitos fiscales" rows={debitRows} /><SummaryTable heading="Resumen de créditos fiscales" rows={creditRows} /></div></section>;
+}
+
+function SummaryTable({ heading, rows }: { heading: string; rows: ReadonlyArray<readonly [string, number, number]> }) {
+  return <div className="overflow-x-auto border-stone-200 first:border-b dark:border-stone-800 lg:first:border-b-0 lg:first:border-r"><Table><TableHeader><TableRow><TableHead className="px-5">{heading}</TableHead><TableHead className="text-right">Base imponible</TableHead><TableHead className="px-5 text-right">{heading.includes("débitos") ? "Débito fiscal" : "Crédito fiscal"}</TableHead></TableRow></TableHeader><TableBody>{rows.map(([label, base, tax], index) => <TableRow className={index === rows.length - 1 ? "bg-sky-50 font-semibold dark:bg-sky-950/40" : ""} key={label}><TableCell className="px-5">{label}</TableCell><TableCell className="text-right tabular-nums">{number.format(base)}</TableCell><TableCell className="px-5 text-right tabular-nums">{number.format(tax)}</TableCell></TableRow>)}</TableBody></Table></div>;
+}
+
+function ClosingTab({ closed, confirmDifference, data, declaredAmount, filedAt, hasDifference, onAmount, onConfirmDifference, onDate, onUpload, onClose, saving, totals, uploading }: { closed: boolean; confirmDifference: boolean; data: Workspace; declaredAmount: string; filedAt: string; hasDifference: boolean; onAmount: (value: string) => void; onConfirmDifference: (value: boolean) => void; onDate: (value: string) => void; onUpload: (kind: EvidenceKind, file: File | null) => Promise<void>; onClose: () => void; saving: boolean; totals: Totals; uploading: EvidenceKind | null }) {
+  const evidenceByKind = new Map(data.case.evidences.map((item) => [item.kind, item]));
+  return <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]"><div className="space-y-5"><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><h2 className="font-semibold">Datos presentados en SENIAT</h2><p className="mt-1 text-sm text-stone-500">Registra exactamente la fecha y el monto de la declaración presentada, aunque difieran de la determinación interna.</p><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium">Fecha de presentación<DatePicker className="field mt-1.5" disabled={closed} onValueChange={onDate} value={filedAt} /></label><label className="text-sm font-medium">Monto declarado en SENIAT<Input className="field mt-1.5" disabled={closed} inputMode="decimal" onChange={(event) => onAmount(event.target.value)} placeholder={String(totals.taxPayable.toFixed(2))} value={declaredAmount} /></label></div>{hasDifference && !closed && <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100"><input checked={confirmDifference} className="mt-0.5 size-4" onChange={(event) => onConfirmDifference(event.target.checked)} type="checkbox" /><span><b>Confirmar diferencia con la determinación</b><span className="mt-1 block text-xs leading-5">El monto presentado no coincide con {money.format(totals.taxPayable)}. La diferencia quedará visible en el expediente.</span></span></label>}</section><section className="rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="border-b border-stone-100 p-5 dark:border-stone-800"><h2 className="font-semibold">Soportes configurados</h2><p className="mt-1 text-sm text-stone-500">La lista proviene de Configuración de impuestos de la firma y se archiva en este expediente.</p></header><div className="grid gap-4 p-5 sm:grid-cols-2">{data.case.requirements.map((requirement) => { const evidence = evidenceByKind.get(requirement.kind); const paymentEvidence = ["PAYMENT_FORM", "PAYMENT_RECEIPT"].includes(requirement.kind); const requiredNow = requirement.required && !paymentEvidence; return <div key={requirement.kind}><div className="mb-2 flex items-center justify-between gap-2"><p className="text-sm font-medium">{requirement.label}</p><span className={`rounded-full px-2 py-1 text-[11px] font-medium ${requiredNow ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300" : "bg-stone-100 text-stone-500 dark:bg-stone-800"}`}>{requiredNow ? "Obligatorio" : paymentEvidence ? "Se adjunta al pagar" : "Opcional"}</span></div><AttachmentInput accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" aria-label={`Adjuntar ${requirement.label}`} disabled={closed || uploading !== null} fileName={evidence?.name ?? ""} label={uploading === requirement.kind ? "Cargando soporte…" : `Adjuntar ${requirement.label.toLocaleLowerCase("es")}`} onChange={(event) => void onUpload(requirement.kind, event.target.files?.[0] ?? null)} /></div>; })}{data.case.requirements.length === 0 && <p className="text-sm text-stone-500 sm:col-span-2">Este impuesto no tiene soportes habilitados. Configúralos en la firma antes de declarar.</p>}</div></section></div><aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Conciliación final</p><div className="mt-4 border-y border-stone-100 py-2 dark:border-stone-800"><Line label="Determinado por el sistema" value={money.format(totals.taxPayable)} /><Line label="Declarado en SENIAT" value={money.format(declaredAmount ? amount(declaredAmount.replace(",", ".")) : totals.taxPayable)} /><Line label="Diferencia" value={money.format((declaredAmount ? amount(declaredAmount.replace(",", ".")) : totals.taxPayable) - totals.taxPayable)} /></div>{!closed ? <Button className="mt-5 w-full bg-[#14352d] text-white hover:bg-[#0e2821]" disabled={saving || !data.canManage || !filedAt || (hasDifference && !confirmDifference)} onClick={onClose}>{saving ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />} {saving ? "Declarando…" : "Declarar y generar compromiso"}</Button> : <div className="mt-5 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"><CircleCheck className="mr-1 inline" size={16} /> Declarada el {displayDate(data.declaration.filedAt)}<Link className="mt-2 block font-semibold underline underline-offset-2" href="/compromisos-de-pago">Ir a Compromisos de pago</Link></div>}<p className="mt-3 text-xs leading-5 text-stone-500">Al declarar se bloquean los documentos seleccionados y los saldos remanentes quedan disponibles para el período siguiente. El pago se registra desde Compromisos.</p></aside></section>;
+}
+
+function Metric({ icon: Icon, label, value, detail, tone }: { icon: typeof Calculator; label: string; value: string; detail: string; tone: "stone" | "sky" | "violet" | "emerald" }) { const colors = { stone: "bg-stone-100 text-stone-600 dark:bg-stone-800", sky: "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300", violet: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300", emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" }; return <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900"><div className={`grid size-8 place-items-center rounded-lg ${colors[tone]}`}><Icon size={16} /></div><p className="mt-3 text-xs text-stone-500">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums">{value}</p><p className="mt-1 text-xs text-stone-500">{detail}</p></div>; }
+function FormItem({ item, label, value, strong = false }: { item: string; label: string; value: number; strong?: boolean }) { return <div className={`border-b border-stone-100 p-4 dark:border-stone-800 sm:border-r ${strong ? "bg-emerald-50 dark:bg-emerald-950/30" : ""}`}><div className="flex items-center justify-between gap-3"><span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600 dark:bg-stone-800 dark:text-stone-300">Ítem {item}</span><span className={`tabular-nums ${strong ? "font-semibold text-emerald-800 dark:text-emerald-200" : "font-medium"}`}>{money.format(value)}</span></div><p className="mt-2 text-xs text-stone-500">{label}</p></div>; }
+function Line({ label, value, detail, strong = false }: { label: string; value: string; detail?: string; strong?: boolean }) { return <div className={`flex items-start justify-between gap-5 py-3 ${strong ? "text-base font-semibold" : "text-sm"}`}><div><p>{label}</p>{detail && <p className="mt-1 text-xs font-normal text-stone-500">{detail}</p>}</div><p className="shrink-0 text-right font-medium tabular-nums">{value}</p></div>; }
+function GroupTitle({ number: value, title }: { number: string; title: string }) { return <div className="mt-2 flex items-center gap-2 border-b border-stone-100 py-3 text-xs font-semibold uppercase tracking-wide text-stone-500 first:mt-0 dark:border-stone-800"><span className="grid size-5 place-items-center rounded-full bg-stone-100 text-[10px] text-stone-600 dark:bg-stone-800 dark:text-stone-300">{value}</span>{title}</div>; }
+function Progress({ label, total, value, tone }: { label: string; total: number; value: number; tone: "emerald" | "amber" | "stone" }) { const width = total > 0 ? Math.min(100, value / total * 100) : 0; const color = { emerald: "bg-emerald-600", amber: "bg-amber-500", stone: "bg-stone-400" }[tone]; return <div><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span>{label}</span><span className="font-medium tabular-nums">{money.format(value)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800"><div className={`h-full rounded-full ${color}`} style={{ width: `${width}%` }} /></div></div>; }
+function Workflow({ number: value, label, detail, done = false }: { number: string; label: string; detail: string; done?: boolean }) { return <div className="flex items-start gap-3"><span className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${done ? "bg-[#14352d] text-white" : "bg-stone-100 text-stone-500 dark:bg-stone-800"}`}>{done ? <Check size={14} /> : value}</span><div><p className="text-sm font-medium">{label}</p><p className="mt-0.5 text-xs text-stone-500">{detail}</p></div></div>; }
+function StatusBadge({ status }: { status: Status }) { const color = ["SUBMITTED", "PAID", "CLOSED"].includes(status) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : status === "READY_FOR_REVIEW" ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"; return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{statusLabels[status]}</span>; }
+function State({ icon: Icon, title, description, action, spin = false }: { icon: typeof ReceiptText; title: string; description: string; action?: React.ReactNode; spin?: boolean }) { return <div className="mx-auto mt-8 max-w-3xl rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center dark:border-stone-700 dark:bg-stone-900"><Icon className={`mx-auto text-stone-400 ${spin ? "animate-spin" : ""}`} size={28} /><h2 className="mt-3 font-semibold">{title}</h2><p className="mx-auto mt-1 max-w-xl text-sm text-stone-500">{description}</p>{action && <div className="mt-4">{action}</div>}</div>; }

@@ -937,6 +937,11 @@ export async function resetCalendarCase(
       where: { id: caseId, firmId: auth.firmId },
       include: {
         evidences: { include: { storedObject: true } },
+        ivaDeclaration: {
+          include: {
+            documents: { select: { documentId: true, kind: true } },
+          },
+        },
       },
     });
     if (!auth.allowedCompanyIds.includes(existing.companyId))
@@ -957,6 +962,50 @@ export async function resetCalendarCase(
         where: { id: { in: objects.map(({ id }) => id) } },
         data: { status: "ARCHIVED" },
       });
+    if (existing.ivaDeclaration) {
+      const saleIds = existing.ivaDeclaration.documents
+        .filter(({ kind }) => kind === "SALE")
+        .map(({ documentId }) => documentId);
+      const purchaseIds = existing.ivaDeclaration.documents
+        .filter(({ kind }) => kind === "PURCHASE")
+        .map(({ documentId }) => documentId);
+      if (saleIds.length)
+        await transaction.commercialDocument.updateMany({
+          where: { id: { in: saleIds }, companyId: existing.companyId },
+          data: { declaredAt: null },
+        });
+      if (purchaseIds.length)
+        await transaction.commercialDocument.updateMany({
+          where: { id: { in: purchaseIds }, companyId: existing.companyId },
+          data: { declaredAt: null, vatCreditStatus: "PENDING" },
+        });
+      await transaction.ivaDeclarationDocument.deleteMany({
+        where: { declarationId: existing.ivaDeclaration.id },
+      });
+      await transaction.ivaDeclarationRetention.deleteMany({
+        where: { declarationId: existing.ivaDeclaration.id },
+      });
+      await transaction.ivaFiscalBook.deleteMany({
+        where: { declarationId: existing.ivaDeclaration.id },
+      });
+      await transaction.ivaDeclaration.update({
+        where: { id: existing.ivaDeclaration.id },
+        data: {
+          salesTaxableBase: 0,
+          salesExemptAmount: 0,
+          debitTax: 0,
+          purchaseTaxCredit: 0,
+          deductibleTaxCredit: 0,
+          currentRetentionCredit: 0,
+          prorationFactor: null,
+          taxPayable: 0,
+          fiscalCreditCarryforward: 0,
+          retentionCreditCarryforward: 0,
+          determinedAt: null,
+          version: { increment: 1 },
+        },
+      });
+    }
     const updated = await transaction.complianceCase.update({
       where: { id: caseId },
       data: {
@@ -979,7 +1028,12 @@ export async function resetCalendarCase(
         entityId: caseId,
         metadata: {
           previousStatus: existing.status,
-          removedEvidence: objects.map(({ key: _key, ...object }) => object),
+          removedEvidence: objects.map(({ id, kind, originalName, checksumSha256 }) => ({
+            id,
+            kind,
+            originalName,
+            checksumSha256,
+          })),
         },
       },
     });

@@ -12,6 +12,11 @@ import { z } from "zod";
 import { withAuthTransaction } from "@/infrastructure/database/auth-transaction";
 import { getPrivateObject } from "@/infrastructure/object-storage/s3-private-storage";
 import {
+  generateIvaFiscalBookPdf,
+  type IvaFiscalBookKind,
+} from "@/modules/declarations/application/iva-book-files";
+import type { IvaFiscalBookSnapshot } from "@/modules/declarations/domain/iva-books";
+import {
   requirePermission,
   AuthorizationError,
 } from "@/modules/identity/application/auth-context";
@@ -151,6 +156,33 @@ export async function getArchivePeriod(
         { offeringName: "asc" },
       ],
     });
+    const ivaBooks = await transaction.ivaFiscalBook.findMany({
+      where: {
+        firmId: auth.firmId,
+        companyId,
+        periodKey: period,
+        declaration: {
+          complianceCase: {
+            status: { in: ["SUBMITTED", "PAID", "CLOSED"] },
+            suppressedAt: null,
+          },
+        },
+      },
+      select: {
+        id: true,
+        kind: true,
+        snapshot: true,
+        generatedAt: true,
+        declaration: { select: { caseId: true } },
+      },
+      orderBy: { kind: "asc" },
+    });
+    const booksByCase = new Map<string, typeof ivaBooks>();
+    for (const book of ivaBooks) {
+      const current = booksByCase.get(book.declaration.caseId) ?? [];
+      current.push(book);
+      booksByCase.set(book.declaration.caseId, current);
+    }
     const company = companies.find((item) => item.id === companyId)!;
     const serializeCase = (item: (typeof cases)[number]) => {
       const requirements = boardEvidenceRequirementsSchema.parse(
@@ -162,7 +194,7 @@ export async function getArchivePeriod(
           { ...requirement, order: index },
         ]),
       );
-      const documents = item.evidences
+      const evidenceDocuments = item.evidences
         .map((evidence) => {
           const requirement = requirementByKind.get(
             evidence.kind as (typeof requirements)[number]["kind"],
@@ -191,6 +223,23 @@ export async function getArchivePeriod(
             left.documentOrder - right.documentOrder ||
             left.name.localeCompare(right.name, "es"),
         );
+      const bookDocuments = (booksByCase.get(item.id) ?? [])
+        .sort((left, right) => {
+          const order = { PURCHASES: 0, SALES: 1 } as const;
+          return order[left.kind] - order[right.kind];
+        })
+        .map((book, index) => ({
+          id: book.id,
+          name: book.kind === "PURCHASES" ? "Libro de compras" : "Libro de ventas",
+          fileName: `${book.kind === "PURCHASES" ? "libro-compras" : "libro-ventas"}-${period}.pdf`,
+          mimeType: "application/pdf",
+          sizeBytes: Buffer.byteLength(JSON.stringify(book.snapshot), "utf8"),
+          status: "AVAILABLE" as const,
+          origin: "Libro fiscal generado",
+          fiscalBoard: false,
+          documentOrder: 10_000 + index,
+        }));
+      const documents = [...evidenceDocuments, ...bookDocuments];
       const expectedBoardDocuments =
         item.offeringKind === "TAX"
           ? requirements
@@ -232,7 +281,11 @@ type ArchiveSource = {
   label: string;
   fileName: string;
   mimeType: string;
-  objectKey: string;
+  objectKey?: string;
+  generatedBook?: {
+    kind: IvaFiscalBookKind;
+    snapshot: IvaFiscalBookSnapshot;
+  };
   sizeBytes: number;
   archiveOrder: number;
   documentOrder: number;
@@ -250,6 +303,12 @@ function cleanPdfText(value: string) {
     .replace(/[\u2018\u2019]/g, "'")
     .replace(/[\u201c\u201d]/g, '"')
     .replace(/[^\x20-\x7E\xA0-\xFF]/g, " ");
+}
+
+function ivaBookSnapshot(value: unknown): IvaFiscalBookSnapshot {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !("version" in value) || value.version !== 1)
+    throw new Error("La instantánea de un libro fiscal no tiene una versión compatible.");
+  return value as IvaFiscalBookSnapshot;
 }
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number) {
@@ -302,7 +361,12 @@ function drawWrappedText(
 }
 
 async function loadSource(source: ArchiveSource): Promise<LoadedSource> {
-  const bytes = await getPrivateObject(source.objectKey);
+  const bytes = source.generatedBook
+    ? await generateIvaFiscalBookPdf(source.generatedBook.snapshot, source.generatedBook.kind)
+    : source.objectKey
+      ? await getPrivateObject(source.objectKey)
+      : null;
+  if (!bytes) throw new Error(`No se encontró el contenido de ${source.fileName}.`);
   if (source.mimeType === "application/pdf") {
     try {
       const sourcePdf = await PDFDocument.load(bytes);
@@ -371,7 +435,7 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
     );
 
   const snapshot = await withAuthTransaction(auth, async (transaction) => {
-    const [firm, company, evidences] = await Promise.all([
+    const [firm, company, evidences, fiscalBooks] = await Promise.all([
       transaction.firm.findUniqueOrThrow({
         where: { id: auth.firmId },
         select: { legalName: true, tradeName: true, archivePaperSize: true },
@@ -409,14 +473,61 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
           },
         },
       }),
+      transaction.ivaFiscalBook.findMany({
+        where: {
+          id: { in: input.evidenceIds },
+          firmId: auth.firmId,
+          companyId: input.companyId,
+          periodKey: input.period,
+          declaration: {
+            complianceCase: {
+              status: { in: ["SUBMITTED", "PAID", "CLOSED"] },
+              suppressedAt: null,
+            },
+          },
+        },
+        select: {
+          id: true,
+          kind: true,
+          snapshot: true,
+          declaration: {
+            select: {
+              complianceCase: {
+                select: {
+                  offeringName: true,
+                  offering: { select: { archiveOrder: true } },
+                },
+              },
+            },
+          },
+        },
+      }),
     ]);
-    if (evidences.length !== input.evidenceIds.length)
+    if (evidences.length + fiscalBooks.length !== input.evidenceIds.length)
       throw new Error(
         "La selección contiene archivos no disponibles o ajenos al período.",
       );
     const byId = new Map(evidences.map((evidence) => [evidence.id, evidence]));
+    const bookById = new Map(fiscalBooks.map((book) => [book.id, book]));
     const sources = input.evidenceIds.map((id): ArchiveSource => {
-      const evidence = byId.get(id)!;
+      const book = bookById.get(id);
+      if (book) {
+        const label = book.kind === "PURCHASES" ? "Libro de compras" : "Libro de ventas";
+        const snapshot = ivaBookSnapshot(book.snapshot);
+        return {
+          id,
+          group: book.declaration.complianceCase.offeringName,
+          label,
+          fileName: `${book.kind === "PURCHASES" ? "libro-compras" : "libro-ventas"}-${input.period}.pdf`,
+          mimeType: "application/pdf",
+          sizeBytes: Buffer.byteLength(JSON.stringify(book.snapshot), "utf8"),
+          archiveOrder: book.declaration.complianceCase.offering.archiveOrder,
+          documentOrder: book.kind === "PURCHASES" ? 10_000 : 10_001,
+          generatedBook: { kind: book.kind, snapshot },
+        };
+      }
+      const evidence = byId.get(id);
+      if (!evidence) throw new Error("La selección contiene un documento no disponible.");
       const requirements = boardEvidenceRequirementsSchema.parse(
         evidence.case.offering.evidenceRequirements,
       );

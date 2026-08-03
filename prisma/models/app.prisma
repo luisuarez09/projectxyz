@@ -222,6 +222,20 @@ enum CommercialRetentionType {
   @@schema("app")
 }
 
+enum IvaDeclarationDocumentKind {
+  SALE
+  PURCHASE
+
+  @@schema("app")
+}
+
+enum IvaFiscalBookKind {
+  SALES
+  PURCHASES
+
+  @@schema("app")
+}
+
 /// Tenant anchor retained even while the product launches with one firm.
 model Firm {
   id                       String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
@@ -266,6 +280,8 @@ model Firm {
   commercialCounterparties CommercialCounterparty[]
   commercialPartyRoles     CommercialPartyRole[]
   commercialDocuments      CommercialDocument[]
+  ivaDeclarations          IvaDeclaration[]
+  ivaFiscalBooks           IvaFiscalBook[]
   logoStoredObject         StoredObject?            @relation("FirmLogo", fields: [logoStoredObjectId], references: [id], onDelete: Restrict)
 
   @@map("firms")
@@ -615,6 +631,8 @@ model Company {
   commercialCounterparties    CommercialCounterparty[]
   commercialPartyRoles        CommercialPartyRole[]
   commercialDocuments         CommercialDocument[]
+  ivaDeclarations             IvaDeclaration[]
+  ivaFiscalBooks              IvaFiscalBook[]
 
   @@unique([firmId, normalizedRif])
   @@index([firmId, status])
@@ -824,6 +842,7 @@ model CommercialDocument {
   items          CommercialDocumentItem[]
   accountingEntries CommercialAccountingEntry[]
   retentions     CommercialRetention[]
+  ivaDeclarations IvaDeclarationDocument[]
 
   @@index([firmId, companyId, type, issueDate])
   @@index([counterpartyId, issueDate])
@@ -883,6 +902,7 @@ model CommercialRetention {
   updatedAt               DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
   document                CommercialDocument        @relation(fields: [documentId], references: [id], onDelete: Cascade)
   attachment              StoredObject?             @relation("CommercialRetentionAttachment", fields: [attachmentId], references: [id], onDelete: Restrict)
+  ivaDeclarations         IvaDeclarationRetention[]
 
   @@unique([documentId, type])
   @@unique([companyId, type, normalizedReceiptNumber])
@@ -956,6 +976,7 @@ model ComplianceCase {
   offering             FirmOffering             @relation(fields: [offeringId], references: [id], onDelete: Restrict)
   assignedProfile      UserProfile?             @relation("ComplianceCaseAssignee", fields: [assignedProfileId], references: [id], onDelete: SetNull)
   evidences            ComplianceCaseEvidence[]
+  ivaDeclaration       IvaDeclaration?
 
   @@unique([companyId, offeringId, periodKey])
   @@index([firmId, periodMonth, status])
@@ -963,6 +984,95 @@ model ComplianceCase {
   @@index([companyId, periodMonth, dueDate])
   @@index([assignedProfileId, status])
   @@map("compliance_cases")
+  @@schema("app")
+}
+
+model IvaDeclaration {
+  id                         String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId                     String                    @map("firm_id") @db.Uuid
+  companyId                  String                    @map("company_id") @db.Uuid
+  caseId                     String                    @unique @map("case_id") @db.Uuid
+  periodKey                  String                    @map("period_key") @db.VarChar(7)
+  previousFiscalCredit       Decimal                   @default(0) @map("previous_fiscal_credit") @db.Decimal(20, 6)
+  previousRetentionCredit    Decimal                   @default(0) @map("previous_retention_credit") @db.Decimal(20, 6)
+  salesTaxableBase           Decimal                   @default(0) @map("sales_taxable_base") @db.Decimal(20, 6)
+  salesExemptAmount          Decimal                   @default(0) @map("sales_exempt_amount") @db.Decimal(20, 6)
+  debitTax                   Decimal                   @default(0) @map("debit_tax") @db.Decimal(20, 6)
+  purchaseTaxCredit          Decimal                   @default(0) @map("purchase_tax_credit") @db.Decimal(20, 6)
+  deductibleTaxCredit        Decimal                   @default(0) @map("deductible_tax_credit") @db.Decimal(20, 6)
+  currentRetentionCredit     Decimal                   @default(0) @map("current_retention_credit") @db.Decimal(20, 6)
+  prorationFactor            Decimal?                  @map("proration_factor") @db.Decimal(12, 8)
+  taxPayable                 Decimal                   @default(0) @map("tax_payable") @db.Decimal(20, 6)
+  fiscalCreditCarryforward   Decimal                   @default(0) @map("fiscal_credit_carryforward") @db.Decimal(20, 6)
+  retentionCreditCarryforward Decimal                 @default(0) @map("retention_credit_carryforward") @db.Decimal(20, 6)
+  determinedAt               DateTime?                 @map("determined_at") @db.Timestamptz(6)
+  createdAt                  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version                    Int                       @default(1)
+  firm                       Firm                      @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company                    Company                   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  complianceCase             ComplianceCase            @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  documents                  IvaDeclarationDocument[]
+  retentions                 IvaDeclarationRetention[]
+  fiscalBooks                IvaFiscalBook[]
+
+  @@unique([companyId, periodKey])
+  @@index([firmId, companyId, periodKey])
+  @@map("iva_declarations")
+  @@schema("app")
+}
+
+model IvaDeclarationDocument {
+  id            String                     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId        String                     @map("firm_id") @db.Uuid
+  companyId     String                     @map("company_id") @db.Uuid
+  declarationId String                     @map("declaration_id") @db.Uuid
+  documentId    String                     @map("document_id") @db.Uuid
+  kind          IvaDeclarationDocumentKind
+  createdAt     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  declaration   IvaDeclaration             @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  document      CommercialDocument         @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId])
+  @@index([firmId, companyId, declarationId])
+  @@map("iva_declaration_documents")
+  @@schema("app")
+}
+
+model IvaDeclarationRetention {
+  id            String              @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId        String              @map("firm_id") @db.Uuid
+  companyId     String              @map("company_id") @db.Uuid
+  declarationId String              @map("declaration_id") @db.Uuid
+  retentionId   String              @map("retention_id") @db.Uuid
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  declaration   IvaDeclaration      @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  retention     CommercialRetention @relation(fields: [retentionId], references: [id], onDelete: Restrict)
+
+  @@unique([retentionId])
+  @@index([firmId, companyId, declarationId])
+  @@map("iva_declaration_retentions")
+  @@schema("app")
+}
+
+model IvaFiscalBook {
+  id            String            @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  firmId        String            @map("firm_id") @db.Uuid
+  companyId     String            @map("company_id") @db.Uuid
+  declarationId String            @map("declaration_id") @db.Uuid
+  periodKey     String            @map("period_key") @db.VarChar(7)
+  kind          IvaFiscalBookKind
+  snapshot      Json
+  generatedAt   DateTime          @default(now()) @map("generated_at") @db.Timestamptz(6)
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  firm          Firm              @relation(fields: [firmId], references: [id], onDelete: Restrict)
+  company       Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  declaration   IvaDeclaration    @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+
+  @@unique([declarationId, kind])
+  @@index([firmId, companyId, periodKey])
+  @@map("iva_fiscal_books")
   @@schema("app")
 }
 

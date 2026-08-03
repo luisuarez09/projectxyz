@@ -9,7 +9,6 @@ import {
   AttachmentDescription,
   AttachmentMedia,
   AttachmentTitle,
-  AttachmentTrigger,
 } from "@/components/ui/attachment"
 import { cn } from "@/lib/utils"
 
@@ -63,7 +62,7 @@ export const AttachmentInput = React.forwardRef<HTMLInputElement, AttachmentInpu
         <input
           {...inputProps}
           accept={accept}
-          className="sr-only"
+          className={cn("sr-only", _legacyClassName)}
           disabled={disabled}
           onChange={(event) => {
             setInternalFileName(event.target.files?.[0]?.name ?? "")
@@ -102,7 +101,18 @@ export const AttachmentInput = React.forwardRef<HTMLInputElement, AttachmentInpu
             setDragging(false)
             selectFile(event.dataTransfer.files?.[0])
           }}
+          onClick={() => {
+            if (!disabled) inputRef.current?.click()
+          }}
+          onKeyDown={(event) => {
+            if (disabled || (event.key !== "Enter" && event.key !== " ")) return
+            event.preventDefault()
+            inputRef.current?.click()
+          }}
+          aria-label={ariaLabel ?? `${fileName ? "Reemplazar" : "Seleccionar"} ${label.toLowerCase()}`}
+          role="button"
           state={fileName ? "done" : "idle"}
+          tabIndex={disabled ? -1 : 0}
         >
           <AttachmentMedia>
             {fileName ? <Paperclip /> : <FileUp />}
@@ -115,15 +125,6 @@ export const AttachmentInput = React.forwardRef<HTMLInputElement, AttachmentInpu
                 : `${description ?? acceptedDescription(accept)}${enableDrop ? " · Arrastra o selecciona un archivo" : ""}`}
             </AttachmentDescription>
           </AttachmentContent>
-          <AttachmentTrigger
-            aria-label={ariaLabel ?? `${fileName ? "Reemplazar" : "Seleccionar"} ${label.toLowerCase()}`}
-            disabled={disabled}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              inputRef.current?.click()
-            }}
-          />
         </Attachment>
       </span>
     )

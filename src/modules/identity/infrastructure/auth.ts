@@ -107,7 +107,7 @@ function createAuth() {
     advanced: {
       database: { generateId: false },
       cookiePrefix: "proyectoxyz",
-      useSecureCookies: process.env.NODE_ENV === "production",
+      useSecureCookies: process.env.NODE_ENV === "https:",
     },
     plugins: [
       twoFactor({

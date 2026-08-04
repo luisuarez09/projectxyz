@@ -189,6 +189,10 @@ async function main() {
       },
     });
     return created;
+
+    }, {
+    maxWait: 60_000,
+    timeout: 300_000,
   });
 
   if (!invitation) {

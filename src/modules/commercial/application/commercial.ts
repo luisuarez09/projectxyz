@@ -856,8 +856,21 @@ async function allocateSaleNumber(
 async function configuredVatRate(
   transaction: Prisma.TransactionClient,
   auth: AuthContext,
+  companyId: string,
   date: Date,
 ) {
+  const companyHasVat = await transaction.companyOffering.findUnique({
+    where: {
+      companyId_kind_offeringKey: {
+        companyId,
+        kind: "TAX",
+        offeringKey: "iva",
+      },
+    },
+    select: { companyId: true },
+  });
+  if (!companyHasVat) return null;
+
   return transaction.taxRate.findFirst({
     where: {
       firmId: auth.firmId,
@@ -944,11 +957,21 @@ export async function getCommercialDocumentFormOptions(
   const companyId = activeCompanyId(auth);
   const type = z.enum(["sale", "purchase"]).parse(rawType);
   return withAuthTransaction(auth, async (transaction) => {
-    const [settings, assignments, rates] = await Promise.all([
+    const [settings, assignments, companyVatOffering, rates] = await Promise.all([
       ensureCommercialSettings(transaction, auth, companyId),
       transaction.companyAccountingAssignment.findMany({
         where: { companyId },
         include: { account: { select: { id: true, code: true, name: true } } },
+      }),
+      transaction.companyOffering.findUnique({
+        where: {
+          companyId_kind_offeringKey: {
+            companyId,
+            kind: "TAX",
+            offeringKey: "iva",
+          },
+        },
+        select: { companyId: true },
       }),
       transaction.taxRate.findMany({
         where: {
@@ -978,7 +1001,8 @@ export async function getCommercialDocumentFormOptions(
           },
         ]),
       ),
-      vatRates: rates.map((rate) => ({
+      vatEnabled: Boolean(companyVatOffering),
+      vatRates: (companyVatOffering ? rates : []).map((rate) => ({
         id: rate.id,
         name: rate.name,
         rate: rate.rate.toString(),
@@ -1242,7 +1266,7 @@ export async function updateCommercialDocument(
 
       const taxAmount = asDecimal(input.taxAmount);
       const rate = taxAmount.isPositive()
-        ? await configuredVatRate(transaction, auth, issueDate)
+        ? await configuredVatRate(transaction, auth, companyId, issueDate)
         : null;
       if (taxAmount.isPositive() && !rate)
         throw new CommercialConflictError(
@@ -1574,7 +1598,7 @@ export async function createCommercialDocument(
 
       const taxAmount = asDecimal(input.taxAmount);
       const rate = taxAmount.isPositive()
-        ? await configuredVatRate(transaction, auth, issueDate)
+        ? await configuredVatRate(transaction, auth, companyId, issueDate)
         : null;
       if (taxAmount.isPositive() && !rate)
         throw new CommercialConflictError(

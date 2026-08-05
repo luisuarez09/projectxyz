@@ -7,6 +7,7 @@ import {
   archiveCommercialParty,
   createCommercialDocument,
   createCommercialParty,
+  getCommercialDocumentFormOptions,
   getCommercialPartyProfile,
   listCommercialParties,
   updateCommercialParty,
@@ -93,6 +94,7 @@ describe("commercial counterparties backend", () => {
     await migrator.query("DELETE FROM app.commercial_party_roles WHERE firm_id = $1", [firmId]);
     await migrator.query("DELETE FROM app.commercial_counterparties WHERE firm_id = $1", [firmId]);
     await migrator.query("DELETE FROM app.company_accounting_assignments WHERE firm_id = $1", [firmId]);
+    await migrator.query("DELETE FROM app.company_offerings WHERE company_id = $1", [companyId]);
     await migrator.query("DELETE FROM app.company_commercial_settings WHERE firm_id = $1", [firmId]);
     await migrator.query("DELETE FROM app.company_chart_accounts WHERE firm_id = $1", [firmId]);
     await migrator.query("DELETE FROM app.tax_rates WHERE firm_id = $1", [firmId]);
@@ -104,6 +106,19 @@ describe("commercial counterparties backend", () => {
   });
 
   it("persists shared customer/supplier profiles and their invoice movements", async () => {
+    await expect(getCommercialDocumentFormOptions(auth, "sale")).resolves.toMatchObject({
+      vatEnabled: false,
+      vatRates: [],
+    });
+    await migrator.query(
+      `INSERT INTO app.company_offerings (company_id, kind, offering_key)
+       VALUES ($1, 'TAX', 'iva')`,
+      [companyId],
+    );
+    await expect(getCommercialDocumentFormOptions(auth, "sale")).resolves.toMatchObject({
+      vatEnabled: true,
+      vatRates: [{ rate: "16" }],
+    });
     const customer = await createCommercialParty(auth, {
       kind: "customer",
       legalName: `Contraparte ${suffix}, C.A.`,

@@ -146,6 +146,7 @@ export function CommercialInvoiceForm({
     {},
   );
   const [vatRates, setVatRates] = useState<VatRate[]>([]);
+  const [vatEnabled, setVatEnabled] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [partyQuery, setPartyQuery] = useState("");
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
@@ -256,7 +257,7 @@ export function CommercialInvoiceForm({
     entries.every((entry) => entry.accountId && numeric(entry.amount) > 0) &&
     (!requiredVatAssignment ||
       Boolean(assignments[isSale ? "iva-debit" : "iva-credit"]));
-  const taxReady = taxableBase <= 0 || Boolean(selectedRate);
+  const taxReady = taxableBase <= 0 || !vatEnabled || Boolean(selectedRate);
   const canSave = Boolean(
     editable &&
     selectedParty &&
@@ -299,6 +300,7 @@ export function CommercialInvoiceForm({
     setAccounts(partyBody.accounts);
     setAssignments(optionsBody.assignments);
     setVatRates(optionsBody.vatRates);
+    setVatEnabled(Boolean(optionsBody.vatEnabled));
     if (!detailBody) {
       setInvoiceNumber(optionsBody.nextSaleNumber ?? "");
       return;
@@ -1330,9 +1332,14 @@ export function CommercialInvoiceForm({
           <p className="mt-1 text-2xl font-semibold">
             {currency} {money(total)}
           </p>
-          {taxableBase > 0 && !selectedRate && (
+          {taxableBase > 0 && vatEnabled && !selectedRate && (
             <p className="mt-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
               Falta una alícuota de IVA activa y vigente para esta fecha.
+            </p>
+          )}
+          {!vatEnabled && (
+            <p className="mt-4 rounded-lg bg-stone-100 p-3 text-xs text-stone-600 dark:bg-stone-800 dark:text-stone-300">
+              Esta empresa no tiene IVA habilitado. La factura se registrará sin IVA.
             </p>
           )}
           {selectedRate && (

@@ -223,4 +223,63 @@ describe("commercial counterparties backend", () => {
     expect((await listCommercialParties(auth, "supplier")).parties).toHaveLength(1);
     expect(Number((await migrator.query<{ count: string }>("SELECT count(*)::text AS count FROM app.commercial_documents WHERE counterparty_id = $1", [customer.id])).rows[0].count)).toBe(2);
   });
+
+  it("registers a fully exempt sales document with zero tax and without VAT accounting entry", async () => {
+    const customer = await createCommercialParty(auth, {
+      kind: "customer",
+      legalName: `Cliente Exento ${suffix}, C.A.`,
+      rif: `J-E${suffix}`,
+      fiscalAddress: "Caracas",
+      email: "",
+      phone: "0414-0000000",
+      primaryAccountId: accounts["1.1.01"],
+      counterpartAccountId: accounts["4.1.01"],
+    });
+
+    const exemptSale = await createCommercialDocument(auth, {
+      type: "sale",
+      counterpartyId: customer.id,
+      documentNumber: "",
+      issueDate: "2026-08-03",
+      currencyCode: "VES",
+      taxableBase: "0.000000",
+      exemptAmount: "250.000000",
+      taxAmount: "0.000000",
+      totalAmount: "250.000000",
+      vatRateId: null,
+      items: [
+        {
+          description: "Servicio Exento",
+          quantity: "1.000000",
+          unitPrice: "250.000000",
+          taxable: false,
+        },
+      ],
+      accountingEntries: [
+        {
+          accountId: accounts["1.1.01"],
+          debit: "250.000000",
+          credit: "0.000000",
+          source: "party",
+        },
+        {
+          accountId: accounts["4.1.01"],
+          debit: "0.000000",
+          credit: "250.000000",
+          source: "counterpart",
+        },
+      ],
+    });
+
+    expect(exemptSale).toMatchObject({
+      type: "sale",
+      taxableBase: "0",
+      exemptAmount: "250",
+      taxAmount: "0",
+      totalAmount: "250",
+      vatRate: null,
+      vatSource: null,
+      status: "registered",
+    });
+  });
 });

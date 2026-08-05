@@ -1265,10 +1265,11 @@ export async function updateCommercialDocument(
         );
 
       const taxAmount = asDecimal(input.taxAmount);
-      const rate = taxAmount.isPositive()
+      const hasTax = taxAmount.greaterThan(0);
+      const rate = hasTax
         ? await configuredVatRate(transaction, auth, companyId, issueDate)
         : null;
-      if (taxAmount.isPositive() && !rate)
+      if (hasTax && !rate)
         throw new CommercialConflictError(
           "No existe una alícuota de IVA activa, con fuente y vigencia, para la fecha indicada.",
         );
@@ -1360,7 +1361,7 @@ export async function updateCommercialDocument(
           vatSource: rate?.source ?? null,
           taxRateId: rate?.id ?? null,
           vatCreditStatus:
-            input.type === "purchase" && taxAmount.isPositive()
+            input.type === "purchase" && hasTax
               ? input.hasVatCredit
                 ? "PENDING"
                 : "EXCLUDED"
@@ -1597,10 +1598,11 @@ export async function createCommercialDocument(
         );
 
       const taxAmount = asDecimal(input.taxAmount);
-      const rate = taxAmount.isPositive()
+      const hasTax = taxAmount.greaterThan(0);
+      const rate = hasTax
         ? await configuredVatRate(transaction, auth, companyId, issueDate)
         : null;
-      if (taxAmount.isPositive() && !rate)
+      if (hasTax && !rate)
         throw new CommercialConflictError(
           "No existe una alícuota de IVA activa, con fuente y vigencia, para la fecha indicada.",
         );
@@ -1706,7 +1708,7 @@ export async function createCommercialDocument(
           vatSource: rate?.source ?? null,
           taxRateId: rate?.id ?? null,
           vatCreditStatus:
-            input.type === "purchase" && taxAmount.isPositive()
+            input.type === "purchase" && hasTax
               ? input.hasVatCredit
                 ? "PENDING"
                 : "EXCLUDED"

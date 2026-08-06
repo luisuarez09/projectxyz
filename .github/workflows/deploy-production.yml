@@ -72,23 +72,39 @@ jobs:
             -H "${{ secrets.VPS_HOST }}" \
             >> ~/.ssh/known_hosts
 
-      - name: Actualizar aplicación en el VPS
-        shell: bash
-        run: |
-          set -euo pipefail
+- name: Actualizar aplicación en el VPS
+  shell: bash
+  run: |
+    set -euo pipefail
 
-          ssh \
-            -i ~/.ssh/id_ed25519 \
-            -p "${{ secrets.VPS_PORT }}" \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-            '
-              set -e
+    ssh \
+      -i ~/.ssh/id_ed25519 \
+      -p "${{ secrets.VPS_PORT }}" \
+      -o BatchMode=yes \
+      -o IdentitiesOnly=yes \
+      "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+      '
+        set -e
 
-              cd /srv/projectxyz
+        cd /srv/projectxyz
 
-              docker compose pull app
-              docker compose up -d --no-deps app
+        echo "Directorio actual:"
+        pwd
 
+        echo "Servicios disponibles:"
+        docker compose config --services
+
+        echo "Descargando imágenes:"
+        docker compose pull
+
+        echo "Actualizando contenedores:"
+        docker compose up -d --remove-orphans
+
+        echo "Estado final:"
+        docker compose ps
+
+        docker image prune -f
+      '
               docker compose ps
               docker image prune -f
             '

@@ -1,110 +1,190 @@
-name: Build and deploy production
+name: Deploy production
 
 on:
-  push:
+  # Se ejecuta después de que las tres imágenes de producción
+  # hayan sido compiladas y publicadas correctamente.
+  workflow_run:
+    workflows:
+      - Publish production images
+    types:
+      - completed
     branches:
       - main
 
-  # Permite ejecutarlo manualmente desde la pestaña Actions.
+  # También permite ejecutar el despliegue manualmente.
   workflow_dispatch:
 
-# Evita que se ejecuten dos despliegues de producción al mismo tiempo.
 concurrency:
   group: projectxyz-production
   cancel-in-progress: true
 
-env:
-  # Debe estar completamente en minúsculas.
-  IMAGE_NAME: ghcr.io/luisuarez09/projectxyz
-
 jobs:
-  build-and-deploy:
-    name: Build and deploy
+  deploy:
+    name: Deploy to VPS
+
+    # En ejecución automática, solo despliega si la compilación terminó bien.
+    # En ejecución manual, permite iniciar directamente.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     environment:
       name: production
 
     permissions:
       contents: read
-      packages: write
+      packages: read
 
     steps:
-      - name: Descargar repositorio
-        uses: actions/checkout@v6
+      - name: Determinar versión a desplegar
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
 
-      - name: Configurar Docker Buildx
-        uses: docker/setup-buildx-action@v3
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            DEPLOY_SHA="${{ github.sha }}"
+          fi
 
-      - name: Iniciar sesión en GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          echo "sha=${DEPLOY_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${DEPLOY_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Compilar y publicar imagen Docker
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-
-          tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          echo "Commit a desplegar: ${DEPLOY_SHA}"
+          echo "Etiqueta Docker: sha-${DEPLOY_SHA}"
 
       - name: Configurar conexión SSH
         shell: bash
         run: |
           set -euo pipefail
 
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
 
-          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" \
+            | tr -d '\r' > "$HOME/.ssh/id_ed25519"
+
+          chmod 600 "$HOME/.ssh/id_ed25519"
 
           ssh-keyscan \
+            -T 10 \
             -p "${{ secrets.VPS_PORT }}" \
             -H "${{ secrets.VPS_HOST }}" \
-            >> ~/.ssh/known_hosts
+            >> "$HOME/.ssh/known_hosts"
 
-- name: Actualizar aplicación en el VPS
-  shell: bash
-  run: |
-    set -euo pipefail
+          chmod 600 "$HOME/.ssh/known_hosts"
 
-    ssh \
-      -i ~/.ssh/id_ed25519 \
-      -p "${{ secrets.VPS_PORT }}" \
-      -o BatchMode=yes \
-      -o IdentitiesOnly=yes \
-      "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
-      '
-        set -e
+      - name: Probar conexión SSH
+        shell: bash
+        run: |
+          set -euo pipefail
 
-        cd /srv/projectxyz
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "${{ secrets.VPS_PORT }}" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=15 \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "echo 'Conexión SSH correcta'; whoami"
 
-        echo "Directorio actual:"
-        pwd
+      - name: Actualizar aplicación en el VPS
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.sha }}
+          IMAGE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
 
-        echo "Servicios disponibles:"
-        docker compose config --services
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -p "${{ secrets.VPS_PORT }}" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=15 \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            "DEPLOY_SHA='$DEPLOY_SHA' IMAGE_TAG='$IMAGE_TAG' bash -s" <<'REMOTE'
+          set -euo pipefail
 
-        echo "Descargando imágenes:"
-        docker compose pull
+          cd /srv/projectxyz
 
-        echo "Actualizando contenedores:"
-        docker compose up -d --remove-orphans
+          echo "Directorio de producción:"
+          pwd
 
-        echo "Estado final:"
-        docker compose ps
+          if [ ! -f ".env" ]; then
+            echo "ERROR: No existe /srv/projectxyz/.env"
+            exit 1
+          fi
 
-        docker image prune -f
-      '
-              docker compose ps
-              docker image prune -f
-            '
+          if [ ! -f "compose.production.yaml" ]; then
+            echo "ERROR: No existe /srv/projectxyz/compose.production.yaml"
+            exit 1
+          fi
+
+          if [ -d ".git" ]; then
+            echo "Actualizando archivos al commit ${DEPLOY_SHA}..."
+
+            git fetch --prune origin main
+            git reset --hard "${DEPLOY_SHA}"
+          else
+            echo "ADVERTENCIA: /srv/projectxyz no es un repositorio Git."
+            echo "Se utilizarán los archivos existentes en el VPS."
+          fi
+
+          echo "Etiqueta de imágenes: ${IMAGE_TAG}"
+
+          echo "Validando compose.production.yaml..."
+
+          IMAGE_TAG="${IMAGE_TAG}" docker compose \
+            --env-file .env \
+            -f compose.production.yaml \
+            config --quiet
+
+          echo "Servicios configurados:"
+
+          IMAGE_TAG="${IMAGE_TAG}" docker compose \
+            --env-file .env \
+            -f compose.production.yaml \
+            config --services
+
+          echo "Descargando imágenes web, worker y migrate..."
+
+          IMAGE_TAG="${IMAGE_TAG}" docker compose \
+            --env-file .env \
+            -f compose.production.yaml \
+            pull migrate web worker
+
+          echo "Actualizando los contenedores..."
+
+          IMAGE_TAG="${IMAGE_TAG}" docker compose \
+            --env-file .env \
+            -f compose.production.yaml \
+            up -d --remove-orphans
+
+          echo "Estado de los contenedores:"
+
+          IMAGE_TAG="${IMAGE_TAG}" docker compose \
+            --env-file .env \
+            -f compose.production.yaml \
+            ps
+
+          echo "Verificando disponibilidad de la aplicación..."
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 12 \
+            --retry-delay 5 \
+            --retry-connrefused \
+            http://127.0.0.1:3000/api/health/ready
+
+          echo
+          echo "Despliegue completado correctamente."
+
+          docker image prune -f
+          REMOTE

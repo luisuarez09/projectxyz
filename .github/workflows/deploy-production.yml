@@ -10,12 +10,12 @@ on:
 
 # Evita que se ejecuten dos despliegues de producción al mismo tiempo.
 concurrency:
-  group: proyectoxyz-production
+  group: projectxyz-production
   cancel-in-progress: true
 
 env:
   # Debe estar completamente en minúsculas.
-  IMAGE_NAME: ghcr.io/luisuarez09/proyectoxyz
+  IMAGE_NAME: ghcr.io/luisuarez09/projectxyz
 
 jobs:
   build-and-deploy:
@@ -84,7 +84,7 @@ jobs:
             '
               set -e
 
-              cd /opt/proyectoxyz
+              cd /srv/projectxyz
 
               docker compose pull app
               docker compose up -d --no-deps app

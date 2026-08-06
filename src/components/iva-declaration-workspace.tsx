@@ -16,7 +16,7 @@ import { buildIvaFiscalBookSnapshot, type IvaFiscalBookSnapshot } from "@/module
 type Status = "PENDING" | "PREPARING" | "READY_FOR_REVIEW" | "SUBMITTED" | "PAID" | "CLOSED" | "INCIDENT" | "NOT_APPLICABLE";
 type BookRetention = { receiptNumber: string; percentage: string; amount: string };
 type Sale = { id: string; date: string; customer: string; rif: string; documentNumber: string; taxableBase: string; exemptAmount: string; nonTaxableAmount: string; taxAmount: string; totalAmount: string; vatRate: string; taxRateName: string; retentions: BookRetention[] };
-type Purchase = { id: string; date: string; supplier: string; rif: string; documentNumber: string; originPeriod: string; taxableBase: string; exemptAmount: string; nonTaxableAmount: string; taxAmount: string; totalAmount: string; vatRate: string; taxRateName: string; retentions: BookRetention[]; selected: boolean };
+type Purchase = { id: string; date: string; supplier: string; rif: string; documentNumber: string; originPeriod: string; taxableBase: string; exemptAmount: string; nonTaxableAmount: string; taxAmount: string; totalAmount: string; vatRate: string; taxRateName: string; retentions: BookRetention[]; selected: boolean; vatCreditStatus?: "PENDING" | "APPLIED" | "EXCLUDED" | null; hasVatCredit?: boolean };
 type Retention = { id: string; date: string; customer: string; rif: string; invoiceNumber: string; receiptNumber: string; percentage: string; amount: string; voucher: { name: string; status: string } | null; selected: boolean };
 type EvidenceKind = "SOLVENCY" | "DECLARATION_RECEIPT" | "DECLARATION_FILE" | "PAYMENT_FORM" | "PAYMENT_RECEIPT";
 type Workspace = {
@@ -53,7 +53,9 @@ function calculate(data: Workspace | null, selectedPurchases: Set<string>, selec
   return {
     ...calculateIvaDetermination({
       sales: sales.map((item) => ({ taxableBase: amount(item.taxableBase), exemptAmount: amount(item.exemptAmount), taxAmount: amount(item.taxAmount) })),
-      purchases: purchases.map((item) => ({ taxAmount: amount(item.taxAmount) })),
+      purchases: purchases.map((item) => ({
+        taxAmount: (item.hasVatCredit ?? (item.vatCreditStatus === "PENDING" && amount(item.taxAmount) > 0)) ? amount(item.taxAmount) : 0
+      })),
       retentions: retentions.map((item) => ({ amount: amount(item.amount) })),
       previousFiscalCredit,
       previousRetentionCredit,
@@ -70,7 +72,7 @@ export function IvaDeclarationWorkspace({ period }: { period: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [tab, setTab] = useState<"determination" | "sales" | "purchases" | "retentions" | "books" | "closing">("determination");
+  const [tab, setTab] = useState<"determination" | "sales" | "purchases" | "retentions" | "books" | "seniatForm" | "closing">("determination");
   const [selectedPurchases, setSelectedPurchases] = useState<Set<string>>(new Set());
   const [selectedRetentions, setSelectedRetentions] = useState<Set<string>>(new Set());
   const [filedAt, setFiledAt] = useState("");
@@ -188,13 +190,14 @@ export function IvaDeclarationWorkspace({ period }: { period: string }) {
 
       <div className="mt-5 grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-900 md:grid-cols-4"><Workflow number="1" label="Ventas consolidadas" detail={`${data.sales.length} documentos del período`} done /><Workflow number="2" label="Créditos seleccionados" detail={`${selectedPurchases.size} compras · ${selectedRetentions.size} retenciones`} done={selectedPurchases.size > 0 || selectedRetentions.size > 0} /><Workflow number="3" label="Revisión interna" detail={data.declaration.status === "READY_FOR_REVIEW" ? "Lista para presentar" : closed ? "Revisión completada" : "Pendiente"} done={data.declaration.status === "READY_FOR_REVIEW" || closed} /><Workflow number="4" label="Presentación y cierre" detail={closed ? `Presentada ${displayDate(data.declaration.filedAt)}` : "Pendiente de SENIAT"} done={closed} /></div>
 
-      <nav className="mt-6 flex gap-1 overflow-x-auto border-b border-stone-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-stone-800" aria-label="Secciones de la declaración">{[["determination", "Determinación"], ["sales", `Ventas (${data.sales.length})`], ["purchases", `Compras (${data.purchases.length})`], ["retentions", `Retenciones (${data.retentions.length})`], ["books", "Libros fiscales"], ["closing", "Presentación y cierre"]].map(([id, label]) => <button className={`shrink-0 border-b-2 px-3 py-3 text-sm font-medium ${tab === id ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"}`} key={id} onClick={() => setTab(id as typeof tab)} type="button">{label}</button>)}</nav>
+      <nav className="mt-6 flex gap-1 overflow-x-auto border-b border-stone-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-stone-800" aria-label="Secciones de la declaración">{[["determination", "Determinación"], ["sales", `Ventas (${data.sales.length})`], ["purchases", `Compras (${data.purchases.length})`], ["retentions", `Retenciones (${data.retentions.length})`], ["books", "Libros fiscales"], ["seniatForm", "Guía SENIAT (Forma 99030)"], ["closing", "Presentación y cierre"]].map(([id, label]) => <button className={`shrink-0 border-b-2 px-3 py-3 text-sm font-medium ${tab === id ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"}`} key={id} onClick={() => setTab(id as typeof tab)} type="button">{label}</button>)}</nav>
 
       {tab === "determination" && <Determination data={data} onGo={setTab} totals={totals} />}
       {tab === "sales" && <SalesTab sales={data.sales} totals={totals} />}
       {tab === "purchases" && <PurchasesTab closed={closed} data={data} selected={selectedPurchases} setSelected={setSelectedPurchases} toggle={(id) => toggle(setSelectedPurchases, id)} totals={totals} allSelected={allPurchasesSelected} />}
       {tab === "retentions" && <RetentionsTab closed={closed} data={data} selected={selectedRetentions} setSelected={setSelectedRetentions} toggle={(id) => toggle(setSelectedRetentions, id)} totals={totals} allSelected={allRetentionsSelected} />}
       {tab === "books" && <BooksTab closed={closed} data={data} selectedPurchases={selectedPurchases} />}
+      {tab === "seniatForm" && <SeniatFormTab data={data} selectedPurchases={selectedPurchases} totals={totals} />}
       {tab === "closing" && <ClosingTab closed={closed} confirmDifference={confirmDifference} data={data} declaredAmount={declaredAmount} filedAt={filedAt} hasDifference={hasDifference} onAmount={setDeclaredAmount} onConfirmDifference={setConfirmDifference} onDate={setFiledAt} onUpload={uploadEvidence} onClose={() => void mutate("close")} saving={saving} totals={totals} uploading={uploading} />}
     </div>
   );
@@ -202,7 +205,7 @@ export function IvaDeclarationWorkspace({ period }: { period: string }) {
 
 type Totals = ReturnType<typeof calculate>;
 
-function Determination({ data, totals, onGo }: { data: Workspace; totals: Totals; onGo: (tab: "purchases" | "retentions" | "closing") => void }) {
+function Determination({ data, totals, onGo }: { data: Workspace; totals: Totals; onGo: (tab: "purchases" | "retentions" | "closing" | "seniatForm") => void }) {
   return <section className="mt-6 space-y-5">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={TrendingUp} label="Débito fiscal" value={money.format(totals.debitTax)} detail={`${data.sales.length} ventas del período`} tone="stone" /><Metric icon={ShoppingCart} label="Crédito deducible" value={money.format(totals.deductibleTaxCredit)} detail={totals.prorationFactor === null ? `${totals.purchaseTaxCredit ? "Sin prorrateo" : "Sin compras seleccionadas"}` : `Prorrateado a ${number.format(totals.prorationFactor * 100)} %`} tone="sky" /><Metric icon={ShieldCheck} label="Retenciones disponibles" value={money.format(totals.retentionCreditsAvailable)} detail="Actuales más saldo anterior" tone="violet" /><Metric icon={Calculator} label="Resultado a pagar" value={money.format(totals.taxPayable)} detail={totals.taxPayable > 0 ? "Antes de presentación" : "Sin impuesto a pagar"} tone="emerald" /></div>
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -211,7 +214,7 @@ function Determination({ data, totals, onGo }: { data: Workspace; totals: Totals
         <GroupTitle number="2" title="Saldos a favor recibidos" /><Line label="Crédito fiscal de períodos anteriores" value={`(${money.format(totals.previousFiscalCredit)})`} detail="Resultado cerrado del período anterior" /><Line label="Retenciones acumuladas anteriores" value={`(${money.format(totals.previousRetentionCredit)})`} detail="Saldo no consumido en la declaración anterior" /><Line label="Retenciones seleccionadas en este expediente" value={`(${money.format(totals.currentRetentionCredit)})`} detail="Solo se consumirán al cerrar" />
         <GroupTitle number="3" title="Resultado de esta declaración" /><Line strong label="Impuesto determinado a pagar" value={money.format(totals.taxPayable)} /><Line label="Crédito fiscal para el próximo período" value={money.format(totals.fiscalCreditCarryforward)} detail="Se trasladará al cerrar" /><Line label="Retenciones para el próximo período" value={money.format(totals.retentionCreditCarryforward)} detail="Se trasladarán al cerrar" />
       </div></section>
-      <aside className="space-y-4"><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Composición de ventas</p><div className="mt-4 space-y-3"><Progress label="Gravadas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.taxableBase} tone="emerald" /><Progress label="Exentas / exoneradas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.exemptAmount} tone="amber" /><Progress label="No sujetas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.nonTaxableAmount} tone="stone" /></div>{totals.prorationFactor !== null && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Hay operaciones gravadas y exentas. La plantilla aplica prorrateo al crédito de compras; valida la fuente y vigencia antes del cierre.</p>}</section><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Continuar el expediente</p><div className="mt-3 grid gap-2"><Button className="justify-between" onClick={() => onGo("purchases")} variant="outline">Revisar compras <ShoppingCart /></Button><Button className="justify-between" onClick={() => onGo("retentions")} variant="outline">Revisar retenciones <ShieldCheck /></Button><Button className="justify-between" onClick={() => onGo("closing")} variant="outline">Registrar presentación <FileCheck2 /></Button></div></section><section className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs leading-5 text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"><p className="font-semibold">Regla aplicada · versión {data.case.ruleVersion}</p><p className="mt-1">{data.case.source || "La configuración no tiene una fuente visible en este expediente. Valídala antes de presentar."}</p></section></aside>
+      <aside className="space-y-4"><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Composición de ventas</p><div className="mt-4 space-y-3"><Progress label="Gravadas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.taxableBase} tone="emerald" /><Progress label="Exentas / exoneradas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.exemptAmount} tone="amber" /><Progress label="No sujetas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.nonTaxableAmount} tone="stone" /></div>{totals.prorationFactor !== null && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Hay operaciones gravadas y exentas. La plantilla aplica prorrateo al crédito de compras; valida la fuente y vigencia antes del cierre.</p>}</section><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Continuar el expediente</p><div className="mt-3 grid gap-2"><Button className="justify-between" onClick={() => onGo("purchases")} variant="outline">Revisar compras <ShoppingCart /></Button><Button className="justify-between" onClick={() => onGo("retentions")} variant="outline">Revisar retenciones <ShieldCheck /></Button><Button className="justify-between" onClick={() => onGo("seniatForm")} variant="outline">Guía SENIAT (Forma 99030) <ReceiptText /></Button><Button className="justify-between" onClick={() => onGo("closing")} variant="outline">Registrar presentación <FileCheck2 /></Button></div></section><section className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs leading-5 text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"><p className="font-semibold">Regla aplicada · versión {data.case.ruleVersion}</p><p className="mt-1">{data.case.source || "La configuración no tiene una fuente visible en este expediente. Valídala antes de presentar."}</p></section></aside>
     </div>
     <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="border-b border-stone-100 p-5 dark:border-stone-800"><h2 className="font-semibold">Correspondencia con la Forma IVA 99030</h2><p className="mt-1 text-sm text-stone-500">Lectura operativa basada en la planilla SENIAT aportada. Los números permiten conciliar la determinación antes de presentar.</p></header><div className="grid sm:grid-cols-2 lg:grid-cols-4"><FormItem item="49" label="Total débitos fiscales" value={totals.debitTax} /><FormItem item="39" label="Total créditos fiscales" value={totals.fiscalCreditsAvailable} /><FormItem item="53" label="Cuota tributaria" value={totals.taxBeforeRetentions} /><FormItem item="60" label="Excedente fiscal siguiente" value={totals.fiscalCreditCarryforward} /><FormItem item="74" label="Total retenciones" value={totals.retentionCreditsAvailable} /><FormItem item="55" label="Retenciones descontadas" value={Math.min(totals.taxBeforeRetentions, totals.retentionCreditsAvailable)} /><FormItem item="67" label="Retenciones no aplicadas" value={totals.retentionCreditCarryforward} /><FormItem item="90" label="Total a pagar" value={totals.taxPayable} strong /></div></section>
   </section>;
@@ -222,7 +225,109 @@ function SalesTab({ sales, totals }: { sales: Sale[]; totals: Totals }) {
 }
 
 function PurchasesTab({ closed, data, selected, setSelected, toggle, totals, allSelected }: { closed: boolean; data: Workspace; selected: Set<string>; setSelected: React.Dispatch<React.SetStateAction<Set<string>>>; toggle: (id: string) => void; totals: Totals; allSelected: boolean }) {
-  return <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]"><div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between"><div><h2 className="font-semibold">Compras disponibles para aprovechar</h2><p className="mt-1 max-w-3xl text-sm text-stone-500">Solo aparecen compras registradas, no utilizadas en otra declaración y dentro de la ventana operativa configurada de 12 meses.</p></div>{!closed && data.purchases.length > 0 && <Button onClick={() => setSelected(allSelected ? new Set() : new Set(data.purchases.map(({ id }) => id)))} size="sm" variant="outline">{allSelected ? "Desmarcar todas" : "Marcar todas"}</Button>}</header><div className="overflow-x-auto"><Table className="min-w-[820px]"><TableHeader className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/70"><TableRow><TableHead className="w-12 px-5"><input aria-label="Seleccionar todas las compras" checked={allSelected} disabled={closed || !data.purchases.length} onChange={() => setSelected(allSelected ? new Set() : new Set(data.purchases.map(({ id }) => id)))} type="checkbox" /></TableHead><TableHead>Proveedor / documento</TableHead><TableHead>Origen</TableHead><TableHead className="text-right">Base</TableHead><TableHead className="text-right">IVA</TableHead><TableHead className="px-5 text-right">Total</TableHead></TableRow></TableHeader><TableBody>{data.purchases.map((item) => <TableRow className={selected.has(item.id) ? "bg-emerald-50/40 dark:bg-emerald-950/15" : ""} key={item.id}><TableCell className="px-5"><input aria-label={`Aprovechar compra ${item.documentNumber}`} checked={selected.has(item.id)} disabled={closed} onChange={() => toggle(item.id)} type="checkbox" /></TableCell><TableCell><p className="font-medium">{item.supplier}</p><p className="text-xs text-stone-500">{item.documentNumber} · {item.rif || "Sin RIF"}</p></TableCell><TableCell><p>{displayDate(item.date)}</p><p className="text-xs text-stone-500">Período {item.originPeriod}</p></TableCell><TableCell className="text-right tabular-nums">{money.format(amount(item.taxableBase))}</TableCell><TableCell className="text-right font-medium tabular-nums">{money.format(amount(item.taxAmount))}</TableCell><TableCell className="px-5 text-right tabular-nums">{money.format(amount(item.totalAmount))}</TableCell></TableRow>)}{data.purchases.length === 0 && <TableRow><TableCell className="py-12 text-center text-stone-500" colSpan={6}>No hay compras con crédito fiscal disponible para este período.</TableCell></TableRow>}</TableBody></Table></div></div><aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Crédito de compras</p><p className="mt-1 text-sm text-stone-500">{selected.size} de {data.purchases.length} compras incluidas</p><div className="mt-4 border-y border-stone-100 py-2 dark:border-stone-800"><Line label="Crédito seleccionado" value={money.format(totals.purchaseTaxCredit)} /><Line label="Crédito deducible" value={money.format(totals.deductibleTaxCredit)} detail={totals.prorationFactor === null ? "Sin prorrateo" : `Factor ${number.format(totals.prorationFactor * 100)} %`} /></div><p className="mt-4 text-xs leading-5 text-stone-500">La selección se reserva en este borrador. Al cerrar, las compras quedan marcadas como aprovechadas y dejan de aparecer en períodos futuros.</p></aside></section>;
+  const selectedPurchaseItems = data.purchases.filter((item) => selected.has(item.id));
+  const totalSelectedPurchasesAmount = selectedPurchaseItems.reduce((sum, item) => sum + amount(item.totalAmount), 0);
+  const totalSelectedNoCreditAmount = selectedPurchaseItems.reduce((sum, item) => {
+    const isCreditable = item.hasVatCredit ?? (item.vatCreditStatus === "PENDING" && amount(item.taxAmount) > 0);
+    return sum + (isCreditable ? 0 : (amount(item.taxableBase) + amount(item.exemptAmount) + amount(item.nonTaxableAmount)));
+  }, 0);
+
+  return (
+    <section className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900">
+        <header className="flex flex-col gap-3 border-b border-stone-100 p-5 dark:border-stone-800 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-semibold">Compras del período (Con y sin derecho a crédito)</h2>
+            <p className="mt-1 max-w-3xl text-sm text-stone-500">
+              Muestra todas las compras del período. Las compras sin derecho a crédito fiscal o exentas no generan IVA deducible pero se consolidan para reportar el total de compras del período (Casilla 30 SENIAT).
+            </p>
+          </div>
+          {!closed && data.purchases.length > 0 && (
+            <Button onClick={() => setSelected(allSelected ? new Set() : new Set(data.purchases.map(({ id }) => id)))} size="sm" variant="outline">
+              {allSelected ? "Desmarcar todas" : "Marcar todas"}
+            </Button>
+          )}
+        </header>
+        <div className="overflow-x-auto">
+          <Table className="min-w-[900px]">
+            <TableHeader className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/70">
+              <TableRow>
+                <TableHead className="w-12 px-5">
+                  <input aria-label="Seleccionar todas las compras" checked={allSelected} disabled={closed || !data.purchases.length} onChange={() => setSelected(allSelected ? new Set() : new Set(data.purchases.map(({ id }) => id)))} type="checkbox" />
+                </TableHead>
+                <TableHead>Proveedor / documento</TableHead>
+                <TableHead>Origen</TableHead>
+                <TableHead>Condición / Crédito</TableHead>
+                <TableHead className="text-right">Base</TableHead>
+                <TableHead className="text-right">IVA</TableHead>
+                <TableHead className="px-5 text-right">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.purchases.map((item) => {
+                const isCreditable = item.hasVatCredit ?? (item.vatCreditStatus === "PENDING" && amount(item.taxAmount) > 0);
+                const isExcluded = item.vatCreditStatus === "EXCLUDED" || item.hasVatCredit === false;
+                const isExempt = !isExcluded && (amount(item.taxAmount) === 0 || amount(item.exemptAmount) > 0);
+                return (
+                  <TableRow className={selected.has(item.id) ? "bg-emerald-50/40 dark:bg-emerald-950/15" : ""} key={item.id}>
+                    <TableCell className="px-5">
+                      <input aria-label={`Aprovechar compra ${item.documentNumber}`} checked={selected.has(item.id)} disabled={closed} onChange={() => toggle(item.id)} type="checkbox" />
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium">{item.supplier}</p>
+                      <p className="text-xs text-stone-500">{item.documentNumber} · {item.rif || "Sin RIF"}</p>
+                    </TableCell>
+                    <TableCell>
+                      <p>{displayDate(item.date)}</p>
+                      <p className="text-xs text-stone-500">Período {item.originPeriod}</p>
+                    </TableCell>
+                    <TableCell>
+                      {isExcluded ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          Sin derecho a crédito
+                        </span>
+                      ) : isExempt ? (
+                        <span className="inline-flex items-center rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                          Exenta / Exonerada
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          Con crédito fiscal
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{money.format(amount(item.taxableBase))}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{money.format(isCreditable ? amount(item.taxAmount) : 0)}</TableCell>
+                    <TableCell className="px-5 text-right tabular-nums">{money.format(amount(item.totalAmount))}</TableCell>
+                  </TableRow>
+                );
+              })}
+              {data.purchases.length === 0 && (
+                <TableRow>
+                  <TableCell className="py-12 text-center text-stone-500" colSpan={7}>
+                    No hay compras registradas para este período.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+      <aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+        <p className="font-semibold">Resumen de Compras</p>
+        <p className="mt-1 text-sm text-stone-500">{selected.size} de {data.purchases.length} compras seleccionadas</p>
+        <div className="mt-4 border-y border-stone-100 py-2 dark:border-stone-800">
+          <Line label="Total monto compras" value={money.format(totalSelectedPurchasesAmount)} />
+          <Line label="Compras sin crédito / exentas" value={money.format(totalSelectedNoCreditAmount)} detail="Casilla 30 SENIAT" />
+          <Line label="Crédito IVA computable" value={money.format(totals.purchaseTaxCredit)} detail="Casilla 34 SENIAT" />
+          <Line label="Crédito fiscal deducible" value={money.format(totals.deductibleTaxCredit)} detail={totals.prorationFactor === null ? "Sin prorrateo" : `Factor ${number.format(totals.prorationFactor * 100)} %`} />
+        </div>
+        <p className="mt-4 text-xs leading-5 text-stone-500">
+          Al declarar, las compras marcadas quedan registradas para el período e integradas en la Forma IVA 99030 y Libros Fiscales.
+        </p>
+      </aside>
+    </section>
+  );
 }
 
 function RetentionsTab({ closed, data, selected, setSelected, toggle, totals, allSelected }: { closed: boolean; data: Workspace; selected: Set<string>; setSelected: React.Dispatch<React.SetStateAction<Set<string>>>; toggle: (id: string) => void; totals: Totals; allSelected: boolean }) {
@@ -369,3 +474,196 @@ function Progress({ label, total, value, tone }: { label: string; total: number;
 function Workflow({ number: value, label, detail, done = false }: { number: string; label: string; detail: string; done?: boolean }) { return <div className="flex items-start gap-3"><span className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold ${done ? "bg-[#14352d] text-white" : "bg-stone-100 text-stone-500 dark:bg-stone-800"}`}>{done ? <Check size={14} /> : value}</span><div><p className="text-sm font-medium">{label}</p><p className="mt-0.5 text-xs text-stone-500">{detail}</p></div></div>; }
 function StatusBadge({ status }: { status: Status }) { const color = ["SUBMITTED", "PAID", "CLOSED"].includes(status) ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : status === "READY_FOR_REVIEW" ? "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300"; return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{statusLabels[status]}</span>; }
 function State({ icon: Icon, title, description, action, spin = false }: { icon: typeof ReceiptText; title: string; description: string; action?: React.ReactNode; spin?: boolean }) { return <div className="mx-auto mt-8 max-w-3xl rounded-xl border border-dashed border-stone-300 bg-white p-10 text-center dark:border-stone-700 dark:bg-stone-900"><Icon className={`mx-auto text-stone-400 ${spin ? "animate-spin" : ""}`} size={28} /><h2 className="mt-3 font-semibold">{title}</h2><p className="mx-auto mt-1 max-w-xl text-sm text-stone-500">{description}</p>{action && <div className="mt-4">{action}</div>}</div>; }
+
+function SeniatFormTab({ data, selectedPurchases, totals }: { data: Workspace; selectedPurchases: Set<string>; totals: Totals }) {
+  const selectedPurchaseItems = data.purchases.filter((item) => selectedPurchases.has(item.id));
+
+  const noCreditPurchasesBase = selectedPurchaseItems.reduce((sum, item) => {
+    const isCreditable = item.hasVatCredit ?? (item.vatCreditStatus === "PENDING" && amount(item.taxAmount) > 0);
+    return sum + (isCreditable ? 0 : (amount(item.taxableBase) + amount(item.exemptAmount) + amount(item.nonTaxableAmount)));
+  }, 0);
+
+  const creditablePurchasesBase = selectedPurchaseItems.reduce((sum, item) => {
+    const isCreditable = item.hasVatCredit ?? (item.vatCreditStatus === "PENDING" && amount(item.taxAmount) > 0);
+    return sum + (isCreditable ? amount(item.taxableBase) : 0);
+  }, 0);
+
+  const totalPurchasesBase = noCreditPurchasesBase + creditablePurchasesBase;
+  const nonTaxableSalesBase = data.sales.reduce((sum, item) => sum + amount(item.exemptAmount) + amount(item.nonTaxableAmount), 0);
+
+  return (
+    <section className="mt-6 space-y-6">
+      <div className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm dark:border-stone-800 dark:bg-stone-900">
+        <div className="flex flex-col gap-4 border-b border-stone-200 pb-5 dark:border-stone-800 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-xl bg-[#14352d] text-xs font-bold text-white">
+              SENIAT
+            </div>
+            <div>
+              <h2 className="font-bold text-stone-900 dark:text-stone-100">FORMA IVA 99030</h2>
+              <p className="text-xs text-stone-500">Borrador Guía para la Declaración y Pago del IVA en portal SENIAT</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <div className="rounded-lg bg-stone-100 px-3 py-1.5 dark:bg-stone-800">
+              <span className="text-stone-500">Período: </span>
+              <span className="font-bold">{data.declaration.periodLabel}</span>
+            </div>
+            <div className="rounded-lg bg-stone-100 px-3 py-1.5 dark:bg-stone-800">
+              <span className="text-stone-500">RIF: </span>
+              <span className="font-bold">{data.company.rif}</span>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => window.print()}>
+              Imprimir Guía 99030
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs leading-5 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <p className="font-semibold">Guía interactiva para la transcripción en el portal del SENIAT</p>
+          <p className="mt-0.5">
+            Utiliza estos números de casilla al ingresar tu declaración en el portal del SENIAT. Las compras sin derecho a crédito fiscal o exentas han sido consolidadas en el <b>Ítem 10 (Casilla 30)</b>.
+          </p>
+        </div>
+
+        {/* Sección DÉBITOS FISCALES */}
+        <div className="mt-6 overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800">
+          <div className="bg-[#14352d] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white">
+            DÉBITOS FISCALES (Ventas e Ingresos del Período)
+          </div>
+          <Table>
+            <TableHeader className="bg-stone-50 text-[11px] dark:bg-stone-800/70">
+              <TableRow>
+                <TableHead className="w-12 px-4 text-center">N°</TableHead>
+                <TableHead>Concepto / Renglón SENIAT</TableHead>
+                <TableHead className="w-32 text-center">Casilla Base</TableHead>
+                <TableHead className="text-right">Base Imponible</TableHead>
+                <TableHead className="w-32 text-center">Casilla Débito</TableHead>
+                <TableHead className="px-4 text-right">Débito Fiscal</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-xs">
+              <SeniatRow num="1" concept="Ventas Internas no Gravadas" boxBase="40" valBase={nonTaxableSalesBase} />
+              <SeniatRow num="2" concept="Ventas de Exportación" boxBase="41" valBase={0} />
+              <SeniatRow num="3" concept="Ventas Internas Gravadas por Alícuota General" boxBase="42" valBase={totals.taxableBase} boxTax="43" valTax={totals.debitTax} />
+              <SeniatRow num="4" concept="Ventas Internas Gravadas por Alícuota General más Adicional" boxBase="442" valBase={0} boxTax="452" valTax={0} />
+              <SeniatRow num="5" concept="Ventas Internas Gravadas por Alícuota Reducida" boxBase="443" valBase={0} boxTax="453" valTax={0} />
+              <SeniatRow num="6" concept="Total Ventas y Débitos Fiscales para efectos de Determinación" boxBase="46" valBase={totals.taxableBase + nonTaxableSalesBase} boxTax="47" valTax={totals.debitTax} strong />
+              <SeniatRow num="7" concept="Ajustes a los Débitos Fiscales de períodos anteriores" boxTax="48" valTax={0} />
+              <SeniatRow num="8" concept="Certificados de Débitos Fiscales Exonerados (recibos de entes exonerados)" boxTax="80" valTax={0} />
+              <SeniatRow num="9" concept="Total Débitos Fiscales" boxTax="49" valTax={totals.debitTax} highlight />
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Sección CRÉDITOS FISCALES */}
+        <div className="mt-6 overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800">
+          <div className="bg-[#14352d] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white">
+            CRÉDITOS FISCALES (Compras y Gastos del Período)
+          </div>
+          <Table>
+            <TableHeader className="bg-stone-50 text-[11px] dark:bg-stone-800/70">
+              <TableRow>
+                <TableHead className="w-12 px-4 text-center">N°</TableHead>
+                <TableHead>Concepto / Renglón SENIAT</TableHead>
+                <TableHead className="w-32 text-center">Casilla Base</TableHead>
+                <TableHead className="text-right">Base Imponible</TableHead>
+                <TableHead className="w-32 text-center">Casilla Crédito</TableHead>
+                <TableHead className="px-4 text-right">Crédito Fiscal</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-xs">
+              <SeniatRow num="10" concept="Compras no Gravadas y/o sin Derecho a Crédito Fiscal" boxBase="30" valBase={noCreditPurchasesBase} note="Incluye compras exentas y sin derecho a crédito fiscal" badge />
+              <SeniatRow num="11" concept="Importaciones Gravadas por Alícuota General" boxBase="31" valBase={0} boxTax="32" valTax={0} />
+              <SeniatRow num="12" concept="Importaciones Gravadas por Alícuota General más Adicional" boxBase="312" valBase={0} boxTax="322" valTax={0} />
+              <SeniatRow num="13" concept="Importaciones Gravadas por Alícuota Reducida" boxBase="313" valBase={0} boxTax="323" valTax={0} />
+              <SeniatRow num="14" concept="Compras Internas Gravadas por Alícuota General" boxBase="33" valBase={creditablePurchasesBase} boxTax="34" valTax={totals.purchaseTaxCredit} />
+              <SeniatRow num="15" concept="Compras Internas Gravadas por Alícuota General más Adicional" boxBase="332" valBase={0} boxTax="342" valTax={0} />
+              <SeniatRow num="16" concept="Compras Internas Gravadas por Alícuota Reducida" boxBase="333" valBase={0} boxTax="343" valTax={0} />
+              <SeniatRow num="17" concept="Total Compras y Créditos Fiscales del Período" boxBase="35" valBase={totalPurchasesBase} boxTax="36" valTax={totals.purchaseTaxCredit} strong />
+              <SeniatRow num="18" concept="Créditos Fiscales Totalmente Deducibles" boxTax="70" valTax={totals.deductibleTaxCredit} />
+              <SeniatRow num="19" concept="Créditos Fiscales producto de la Aplicación de Prorrata" boxTax="37" valTax={0} />
+              <SeniatRow num="20" concept="Total Créditos Fiscales Deducibles (70 + 37)" boxTax="71" valTax={totals.deductibleTaxCredit} />
+              <SeniatRow num="21" concept="Excedente Créditos Fiscales del mes Anterior (ítem 60 anterior)" boxTax="20" valTax={totals.previousFiscalCredit} />
+              <SeniatRow num="22" concept="Reintegro Solicitado (sólo Exportadores)" boxTax="21" valTax={0} />
+              <SeniatRow num="23" concept="Reintegro Solicitado (proveedores a entes exonerados)" boxTax="81" valTax={0} />
+              <SeniatRow num="24" concept="Ajustes a los Créditos Fiscales de períodos anteriores" boxTax="38" valTax={0} />
+              <SeniatRow num="25" concept="Certificados de Débitos Fiscales Exonerados" boxTax="82" valTax={0} />
+              <SeniatRow num="26" concept="Total Créditos Fiscales" boxTax="39" valTax={totals.fiscalCreditsAvailable} highlight />
+            </TableBody>
+          </Table>
+        </div>
+
+        {/* Sección AUTOLIQUIDACIÓN */}
+        <div className="mt-6 overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800">
+          <div className="bg-[#14352d] px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-white">
+            AUTOLIQUIDACIÓN (Determinación de la Cuota y Retenciones)
+          </div>
+          <Table>
+            <TableHeader className="bg-stone-50 text-[11px] dark:bg-stone-800/70">
+              <TableRow>
+                <TableHead className="w-12 px-4 text-center">N°</TableHead>
+                <TableHead>Concepto / Renglón SENIAT</TableHead>
+                <TableHead className="w-32 text-center">Casilla SENIAT</TableHead>
+                <TableHead className="px-4 text-right">Monto (VES)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-xs">
+              <SeniatAutoRow num="27" concept="Total Cuota Tributaria del Período" box="53" val={totals.taxBeforeRetentions} strong />
+              <SeniatAutoRow num="28" concept="Excedente de Crédito Fiscal para el mes siguiente" box="60" val={totals.fiscalCreditCarryforward} />
+              <SeniatAutoRow num="29" concept="Impuesto pagado en Declaración(es) Sustituida(s)" box="22" val={0} />
+              <SeniatAutoRow num="30" concept="Retenciones Descontadas en Declaración(es) Sustituida(s)" box="51" val={0} />
+              <SeniatAutoRow num="31" concept="Percepciones Descontadas en Declaración(es) Sustituida(s)" box="24" val={0} />
+              <SeniatAutoRow num="32" concept="Sub-total Impuesto a Pagar" box="78" val={totals.taxBeforeRetentions} />
+              <SeniatAutoRow num="33" concept="Retenciones Acumuladas por Descontar (períodos anteriores)" box="54" val={totals.previousRetentionCredit} />
+              <SeniatAutoRow num="34" concept="Retenciones del Período" box="66" val={totals.currentRetentionCredit} />
+              <SeniatAutoRow num="35" concept="Créditos Adquiridos por Cesión de Retenciones" box="72" val={0} />
+              <SeniatAutoRow num="36" concept="Recuperación de Retenciones Solicitado" box="73" val={0} />
+              <SeniatAutoRow num="37" concept="Total Retenciones Disponibles (54 + 66)" box="74" val={totals.retentionCreditsAvailable} strong />
+              <SeniatAutoRow num="38" concept="Retenciones Soportadas y Descontadas en esta Declaración" box="55" val={Math.min(totals.taxBeforeRetentions, totals.retentionCreditsAvailable)} />
+              <SeniatAutoRow num="39" concept="Saldo de Retenciones de IVA no aplicado (siguiente período)" box="67" val={totals.retentionCreditCarryforward} />
+              <SeniatAutoRow num="40" concept="Sub-total Impuesto a Pagar" box="56" val={totals.taxPayable} />
+              <SeniatAutoRow num="48" concept="TOTAL A PAGAR" box="90" val={totals.taxPayable} highlight />
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SeniatRow({ num, concept, boxBase, valBase, boxTax, valTax, strong = false, highlight = false, note, badge }: { num: string; concept: string; boxBase?: string; valBase?: number; boxTax?: string; valTax?: number; strong?: boolean; highlight?: boolean; note?: string; badge?: boolean }) {
+  return (
+    <TableRow className={`${highlight ? "bg-emerald-100/60 font-bold dark:bg-emerald-950/60" : strong ? "bg-stone-50 font-semibold dark:bg-stone-800/40" : ""}`}>
+      <TableCell className="px-4 text-center font-medium text-stone-500">{num}</TableCell>
+      <TableCell>
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{concept}</span>
+          {badge && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">Sin Crédito / Exentas</span>}
+        </div>
+        {note && <p className="mt-0.5 text-[11px] text-stone-500">{note}</p>}
+      </TableCell>
+      <TableCell className="text-center">
+        {boxBase ? <span className="inline-block rounded bg-stone-200 px-2 py-0.5 font-mono text-xs font-bold text-stone-800 dark:bg-stone-800 dark:text-stone-200">[{boxBase}]</span> : "—"}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{valBase !== undefined ? money.format(valBase) : "—"}</TableCell>
+      <TableCell className="text-center">
+        {boxTax ? <span className="inline-block rounded bg-[#14352d] px-2 py-0.5 font-mono text-xs font-bold text-white dark:bg-emerald-900 dark:text-emerald-100">[{boxTax}]</span> : "—"}
+      </TableCell>
+      <TableCell className="px-4 text-right tabular-nums font-medium">{valTax !== undefined ? money.format(valTax) : "—"}</TableCell>
+    </TableRow>
+  );
+}
+
+function SeniatAutoRow({ num, concept, box, val, strong = false, highlight = false }: { num: string; concept: string; box: string; val: number; strong?: boolean; highlight?: boolean }) {
+  return (
+    <TableRow className={`${highlight ? "bg-emerald-100/80 font-extrabold text-[#14352d] dark:bg-emerald-950 dark:text-emerald-100" : strong ? "bg-stone-50 font-semibold dark:bg-stone-800/40" : ""}`}>
+      <TableCell className="px-4 text-center font-medium text-stone-500">{num}</TableCell>
+      <TableCell>{concept}</TableCell>
+      <TableCell className="text-center">
+        <span className={`inline-block rounded px-2.5 py-0.5 font-mono text-xs font-bold ${highlight ? "bg-[#14352d] text-white dark:bg-emerald-400 dark:text-stone-950" : "bg-stone-200 text-stone-800 dark:bg-stone-800 dark:text-stone-200"}`}>[{box}]</span>
+      </TableCell>
+      <TableCell className="px-4 text-right tabular-nums font-semibold">{money.format(val)}</TableCell>
+    </TableRow>
+  );
+}

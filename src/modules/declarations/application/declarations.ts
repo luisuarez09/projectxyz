@@ -202,7 +202,7 @@ async function workspaceData(
         issueDate: { gte: creditWindowStart, lte: end },
         OR: [
           { ivaDeclarations: { some: { declarationId: declaration.id } } },
-          { vatCreditStatus: "PENDING", ivaDeclarations: { none: {} } },
+          { vatCreditStatus: { not: "APPLIED" }, ivaDeclarations: { none: {} } },
         ],
       },
       include: {
@@ -312,6 +312,8 @@ async function workspaceData(
         percentage: retention.percentage?.toString() ?? "",
         amount: retention.amount.toString(),
       })),
+      vatCreditStatus: item.vatCreditStatus,
+      hasVatCredit: item.vatCreditStatus === "PENDING" && Number(item.taxAmount) > 0,
       selected: selectedPurchaseIds.includes(item.id),
     })),
     retentions: retentions.map((item) => ({
@@ -378,7 +380,6 @@ export async function updateIvaDeclaration(auth: AuthContext, rawInput: unknown)
             companyId,
             type: "PURCHASE",
             status: "REGISTERED",
-            vatCreditStatus: "PENDING",
             issueDate: { gte: creditWindowStart, lte: end },
             OR: [
               { ivaDeclarations: { none: {} } },
@@ -421,7 +422,7 @@ export async function updateIvaDeclaration(auth: AuthContext, rawInput: unknown)
 
       const totals = calculateIvaDetermination({
         sales: sales.map((item) => ({ taxableBase: decimal(item.taxableBase), exemptAmount: decimal(item.exemptAmount), taxAmount: decimal(item.taxAmount) })),
-        purchases: purchases.map((item) => ({ taxAmount: decimal(item.taxAmount) })),
+        purchases: purchases.map((item) => ({ taxAmount: item.vatCreditStatus === "PENDING" ? decimal(item.taxAmount) : 0 })),
         retentions: retentions.map((item) => ({ amount: decimal(item.amount) })),
         previousFiscalCredit: decimal(declaration.previousFiscalCredit),
         previousRetentionCredit: decimal(declaration.previousRetentionCredit),

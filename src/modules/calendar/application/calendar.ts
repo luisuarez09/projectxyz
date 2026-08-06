@@ -156,7 +156,7 @@ function monthBounds(period: string) {
   };
 }
 
-function shiftMonth(period: string, amount: number) {
+export function shiftMonth(period: string, amount: number) {
   const { year, monthIndex } = monthBounds(period);
   const shifted = utcDate(year, monthIndex + amount, 1);
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -475,7 +475,7 @@ async function buildPeriodProjection(
   return { companies, periodMonth, rows };
 }
 
-async function ensurePeriodCases(
+export async function ensurePeriodCases(
   transaction: Prisma.TransactionClient,
   auth: AuthContext,
   period: string,

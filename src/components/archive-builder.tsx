@@ -5,6 +5,8 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   FileOutput,
@@ -26,7 +28,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SimpleSelect } from "@/components/ui/simple-select";
 
 type Tab = "consolidado" | "cartelera" | "portada";
 type ArchiveDocument = {
@@ -50,7 +51,7 @@ type DocumentGroup = {
   expectedBoardDocuments: string[];
 };
 type ArchiveResponse = {
-  period: { key: string; label: string };
+  period: { key: string; label: string; previous?: string; next?: string };
   company: { id: string; legalName: string; rif: string };
   companies: { id: string; legalName: string; rif: string }[];
   groups: DocumentGroup[];
@@ -60,25 +61,38 @@ type ArchiveResponse = {
 };
 type SelectedDocument = ArchiveDocument & { group: string; groupId: string };
 
-const periodFormatter = new Intl.DateTimeFormat("es-VE", {
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-function periodOptions() {
-  const now = new Date();
-  return Array.from({ length: 18 }, (_, offset) => {
-    const date = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1),
-    );
-    const key = date.toISOString().slice(0, 7);
-    const rawLabel = periodFormatter.format(date);
-    return { key, label: rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1) };
-  });
+function currentPeriod() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Caracas",
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find(({ type }) => type === "year")?.value;
+  const month = parts.find(({ type }) => type === "month")?.value;
+  return `${year}-${month}`;
 }
 
-const periods = periodOptions();
+function shiftMonth(periodKey: string, delta: number) {
+  const [yearStr, monthStr] = periodKey.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10) - 1 + delta;
+  const date = new Date(Date.UTC(year, month, 1));
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function formatPeriodLabel(periodKey: string) {
+  const [year, month] = periodKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  const rawLabel = new Intl.DateTimeFormat("es-VE", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+  return rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1);
+}
+
 const ArchivePdfPreview = dynamic(
   () =>
     import("@/components/archive-pdf-preview").then(
@@ -90,7 +104,7 @@ const ArchivePdfPreview = dynamic(
 export function ArchiveBuilder() {
   const { activeCompanyId, loading: companyLoading } = useCompanyContext();
   const [tab, setTab] = useState<Tab>("consolidado");
-  const [period, setPeriod] = useState(periods[1]?.key ?? periods[0].key);
+  const [period, setPeriod] = useState(currentPeriod());
   const [data, setData] = useState<ArchiveResponse | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -395,10 +409,7 @@ export function ArchiveBuilder() {
   }
 
   const company = data?.company;
-  const periodLabel =
-    data?.period.label ??
-    periods.find((item) => item.key === period)?.label ??
-    period;
+  const periodLabel = data?.period.label ?? formatPeriodLabel(period);
 
   return (
     <div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-6 lg:px-10">
@@ -409,29 +420,26 @@ export function ArchiveBuilder() {
             Archivo físico
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600 dark:text-stone-300">
-            Consolida por período de imposición los archivos disponibles de las
+            Consolida por mes de vencimiento los archivos disponibles de las
             obligaciones y servicios habilitados para la empresa.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <label className="relative">
-            <span className="sr-only">Período de imposición</span>
-            <CalendarDays
-              className="pointer-events-none absolute left-3 top-2.5 text-stone-400"
-              size={16}
-            />
-            <SimpleSelect
-              className="field min-w-44 pl-9"
-              onChange={(event) => setPeriod(event.target.value)}
-              value={period}
-            >
-              {periods.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.label}
-                </option>
-              ))}
-            </SimpleSelect>
-          </label>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setPeriod(data?.period.previous ?? shiftMonth(period, -1))}
+            size="sm"
+            variant="outline"
+          >
+            <ChevronLeft /> Mes anterior
+          </Button>
+          <Button
+            onClick={() => setPeriod(data?.period.next ?? shiftMonth(period, 1))}
+            size="sm"
+            variant="outline"
+          >
+            <span className="capitalize">{periodLabel}</span>
+            <ChevronRight />
+          </Button>
         </div>
       </div>
 

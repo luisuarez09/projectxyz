@@ -21,6 +21,10 @@ import {
   AuthorizationError,
 } from "@/modules/identity/application/auth-context";
 import { permissions } from "@/modules/identity/domain/permissions";
+import {
+  ensurePeriodCases,
+  shiftMonth,
+} from "@/modules/calendar/application/calendar";
 import type { AuthContext } from "@/modules/shared/application/context";
 
 const periodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
@@ -89,6 +93,13 @@ function periodLabel(period: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+function monthBounds(periodKey: string) {
+  const [year, month] = periodSchema.parse(periodKey).split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  return { start, end };
+}
+
 export async function getArchivePeriod(
   auth: AuthContext,
   rawPeriod: unknown,
@@ -115,12 +126,21 @@ export async function getArchivePeriod(
         "Selecciona una empresa disponible para preparar el archivo.",
       );
 
+    for (let offset = 1; offset <= 18; offset += 1) {
+      await ensurePeriodCases(transaction, auth, shiftMonth(period, -offset), companyId);
+    }
+    await ensurePeriodCases(transaction, auth, period, companyId);
+
+    const { start: periodStart, end: periodEnd } = monthBounds(period);
     const cases = await transaction.complianceCase.findMany({
       where: {
         firmId: auth.firmId,
         companyId,
-        periodMonth: monthStart(period),
         suppressedAt: null,
+        OR: [
+          { dueDate: { gte: periodStart, lte: periodEnd } },
+          { dueDate: null, periodMonth: periodStart },
+        ],
       },
       select: {
         id: true,
@@ -156,11 +176,15 @@ export async function getArchivePeriod(
         { offeringName: "asc" },
       ],
     });
+    const caseIds = cases.map((item) => item.id);
     const ivaBooks = await transaction.ivaFiscalBook.findMany({
       where: {
         firmId: auth.firmId,
         companyId,
-        periodKey: period,
+        OR: [
+          { periodKey: period },
+          { declaration: { caseId: { in: caseIds } } },
+        ],
         declaration: {
           complianceCase: {
             status: { in: ["SUBMITTED", "PAID", "CLOSED"] },
@@ -258,7 +282,12 @@ export async function getArchivePeriod(
     };
     const serializedCases = cases.map(serializeCase);
     return {
-      period: { key: period, label: periodLabel(period) },
+      period: {
+        key: period,
+        label: periodLabel(period),
+        previous: shiftMonth(period, -1),
+        next: shiftMonth(period, 1),
+      },
       company,
       companies,
       archivePaperSize: firm.archivePaperSize,
@@ -449,7 +478,7 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
           id: { in: input.evidenceIds },
           firmId: auth.firmId,
           companyId: input.companyId,
-          case: { periodMonth: monthStart(input.period), suppressedAt: null },
+          case: { suppressedAt: null },
           storedObject: { status: "AVAILABLE" },
         },
         select: {
@@ -478,7 +507,6 @@ export async function generateArchivePdf(auth: AuthContext, rawInput: unknown) {
           id: { in: input.evidenceIds },
           firmId: auth.firmId,
           companyId: input.companyId,
-          periodKey: input.period,
           declaration: {
             complianceCase: {
               status: { in: ["SUBMITTED", "PAID", "CLOSED"] },
@@ -863,7 +891,7 @@ export async function generateFiscalBoardPdf(
           id: { in: input.evidenceIds },
           firmId: auth.firmId,
           companyId: input.companyId,
-          case: { periodMonth: monthStart(input.period), suppressedAt: null },
+          case: { suppressedAt: null },
           storedObject: { status: "AVAILABLE" },
         },
         select: {

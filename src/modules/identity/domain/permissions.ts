@@ -17,6 +17,8 @@ export const permissions = {
   calendarManage: "calendar.manage",
   calendarReconcile: "calendar.reconcile",
   calendarReset: "calendar.reset",
+  employeesRead: "employees.read",
+  employeesManage: "employees.manage",
 } as const;
 
 export const phaseOnePermissionCatalog = [
@@ -38,10 +40,12 @@ export const phaseOnePermissionCatalog = [
   { key: permissions.calendarManage, description: "Preparar y actualizar expedientes de cumplimiento" },
   { key: permissions.calendarReconcile, description: "Conciliar el calendario después de cambios administrativos" },
   { key: permissions.calendarReset, description: "Restablecer expedientes y eliminar sus soportes" },
+  { key: permissions.employeesRead, description: "Consultar el directorio de empleados de las empresas autorizadas" },
+  { key: permissions.employeesManage, description: "Crear y modificar fichas de empleados y sus medios de pago" },
 ] as const;
 
 export const defaultRolePermissionKeys = {
   administrador: phaseOnePermissionCatalog.map(({ key }) => key),
-  supervisor: [permissions.teamRead, permissions.companiesRead, permissions.firmSettingsRead, permissions.chartAccountsRead, permissions.chartAccountsManage, permissions.counterpartiesRead, permissions.counterpartiesManage, permissions.commercialDocumentsManage, permissions.calendarRead, permissions.calendarManage],
-  colaborador: [permissions.companiesRead, permissions.chartAccountsRead, permissions.counterpartiesRead, permissions.counterpartiesManage, permissions.commercialDocumentsManage, permissions.calendarRead, permissions.calendarManage],
+  supervisor: [permissions.teamRead, permissions.companiesRead, permissions.firmSettingsRead, permissions.chartAccountsRead, permissions.chartAccountsManage, permissions.counterpartiesRead, permissions.counterpartiesManage, permissions.commercialDocumentsManage, permissions.calendarRead, permissions.calendarManage, permissions.employeesRead, permissions.employeesManage],
+  colaborador: [permissions.companiesRead, permissions.chartAccountsRead, permissions.counterpartiesRead, permissions.counterpartiesManage, permissions.commercialDocumentsManage, permissions.calendarRead, permissions.calendarManage, permissions.employeesRead],
 } as const;

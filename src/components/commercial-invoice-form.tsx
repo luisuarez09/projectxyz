@@ -251,7 +251,7 @@ export function CommercialInvoiceForm({
   const balanced = sideTotals.debit > 0 && difference < 0.005;
   const ivaRetentionAmount = (tax * ivaPercentage) / 100;
   const retentionReady =
-    (!ivaEnabled || /^\d{15}$/.test(ivaReceipt)) &&
+    (!ivaEnabled || /^\d{14}$/.test(ivaReceipt)) &&
     (!islrEnabled || Boolean(islrReceipt.trim() && numeric(islrAmount) > 0));
   const requiredVatAssignment = tax > 0 && (isSale || hasVatCredit);
   const accountReady =
@@ -1231,16 +1231,16 @@ export function CommercialInvoiceForm({
                 >
                   {ivaEnabled && (
                     <div className="mt-4 space-y-3">
-                      <Field label="N.º de comprobante (15 dígitos)">
+                      <Field label="N.º de comprobante (14 dígitos)">
                         <Input
                           className="field mt-1.5"
                           inputMode="numeric"
-                          maxLength={15}
+                          maxLength={14}
                           onChange={(event) =>
                             setIvaReceipt(
                               event.target.value
                                 .replace(/\D/g, "")
-                                .slice(0, 15),
+                                .slice(0, 14),
                             )
                           }
                           value={ivaReceipt}

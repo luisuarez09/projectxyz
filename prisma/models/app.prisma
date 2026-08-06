@@ -236,6 +236,23 @@ enum IvaFiscalBookKind {
   @@schema("app")
 }
 
+enum EmployeeStatus {
+  ACTIVE
+  ON_VACATION
+  SICK_LEAVE
+  SUSPENDED
+  RETIRED
+
+  @@schema("app")
+}
+
+enum EmployeePaymentMethodType {
+  BANK_TRANSFER
+  MOBILE_PAYMENT
+
+  @@schema("app")
+}
+
 /// Tenant anchor retained even while the product launches with one firm.
 model Firm {
   id                       String                   @id @default(dbgenerated("uuidv7()")) @db.Uuid
@@ -633,11 +650,86 @@ model Company {
   commercialDocuments         CommercialDocument[]
   ivaDeclarations             IvaDeclaration[]
   ivaFiscalBooks              IvaFiscalBook[]
+  employees                   Employee[]
+  laborSettings               CompanyLaborSettings?
 
   @@unique([firmId, normalizedRif])
   @@index([firmId, status])
   @@index([responsibleProfileId])
   @@map("companies")
+  @@schema("app")
+}
+
+model CompanyLaborSettings {
+  id               String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  companyId        String   @unique @map("company_id") @db.Uuid
+
+  // Nómina y conversión
+  payrollFrequency String   @default("BIWEEKLY") @map("payroll_frequency")   // WEEKLY | BIWEEKLY | MONTHLY
+  salaryCurrency   String   @default("USD")       @map("salary_currency")
+  rateSource       String   @default("BCV")       @map("rate_source")         // BCV | COMPANY
+  rateLockMoment   String   @default("PAYROLL_CREATION") @map("rate_lock_moment") // PAYROLL_CREATION | PAYMENT_DATE | FIRST_PERIOD
+
+  // Salario mínimo de referencia (sin asumir monto)
+  minWageAmount    Decimal? @map("min_wage_amount") @db.Decimal(20, 2)
+  minWageCurrency  String   @default("VES") @map("min_wage_currency")
+  minWageEffectiveFrom DateTime? @map("min_wage_effective_from") @db.Date
+  minWageSource    String?  @map("min_wage_source")
+
+  // Vacaciones y utilidades
+  benefitScheme    String   @default("LEGAL") @map("benefit_scheme")          // LEGAL | CUSTOM
+  vacationSchedule String   @default("ANNIVERSARY") @map("vacation_schedule") // ANNIVERSARY | YEAR_END
+
+  vacationDaysBase      Int  @default(15) @map("vacation_days_base")
+  vacationDaysIncrement Int  @default(1)  @map("vacation_days_increment")
+  vacationDaysCap       Int  @default(30) @map("vacation_days_cap")
+  vacationBasis         String @default("AGREED_SALARY") @map("vacation_basis")
+
+  bonusDaysBase         Int  @default(15) @map("bonus_days_base")
+  bonusDaysIncrement    Int  @default(1)  @map("bonus_days_increment")
+  bonusDaysCap          Int  @default(30) @map("bonus_days_cap")
+  bonusBasis            String @default("PENDING") @map("bonus_basis")
+
+  profitDaysBase        Int  @default(30) @map("profit_days_base")
+  profitDaysIncrement   Int  @default(0)  @map("profit_days_increment")
+  profitDaysCap         Int  @default(0)  @map("profit_days_cap")
+  profitBasis           String @default("PENDING") @map("profit_basis")
+
+  // Bono de alimentación
+  foodBonusAmount     Decimal @default(0) @map("food_bonus_amount") @db.Decimal(12, 2)
+  foodBonusCurrency   String  @default("USD") @map("food_bonus_currency")
+  foodBonusCadence    String  @default("BIWEEKLY") @map("food_bonus_cadence") // BIWEEKLY | MONTHLY
+  foodBonusSource     String? @map("food_bonus_source")
+
+  version    Int      @default(1)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt      @map("updated_at") @db.Timestamptz(6)
+
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deductions CompanyLaborDeduction[]
+
+  @@map("company_labor_settings")
+  @@schema("app")
+}
+
+model CompanyLaborDeduction {
+  id          String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  settingsId  String   @map("settings_id") @db.Uuid
+  name        String
+  ratePercent Decimal? @map("rate_percent") @db.Decimal(8, 4)
+  basis       String   @default("PENDING")  // PENDING | MIN_WAGE | AGREED_SALARY | CUSTOM
+  cap         Decimal? @db.Decimal(20, 2)
+  capCurrency String   @default("VES") @map("cap_currency")
+  effectiveFrom DateTime? @map("effective_from") @db.Date
+  source      String?
+  active      Boolean  @default(true)
+  ordinal     Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  settings    CompanyLaborSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@index([settingsId, active])
+  @@map("company_labor_deductions")
   @@schema("app")
 }
 
@@ -1143,6 +1235,7 @@ model Branch {
   company         Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
   roleAssignments RoleAssignment[]
   invitations     Invitation[]
+  employees       Employee[]
 
   @@unique([companyId, name])
   @@index([companyId, active])
@@ -1348,5 +1441,53 @@ model DocumentLink {
   @@unique([documentId, entityType, entityId])
   @@index([entityType, entityId])
   @@map("document_links")
+  @@schema("app")
+}
+
+model Employee {
+  id             String                  @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  companyId      String                  @map("company_id") @db.Uuid
+  branchId       String?                 @map("branch_id") @db.Uuid
+  fullName       String                  @map("full_name")
+  identity       String
+  birthDate      DateTime?               @map("birth_date") @db.Date
+  admissionDate  DateTime                @map("admission_date") @db.Date
+  role           String?
+  department     String?
+  contractType   String?                 @map("contract_type")
+  schedule       String?
+  gender         String?
+  address        String?
+  phone          String?
+  salary         Decimal                 @default(0) @db.Decimal(12, 2)
+  salaryCurrency String                  @default("USD") @map("salary_currency")
+  foodBonus      Decimal                 @default(0) @map("food_bonus") @db.Decimal(12, 2)
+  status         EmployeeStatus          @default(ACTIVE)
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  version        Int                     @default(1)
+  company        Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch         Branch?                 @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  paymentMethods EmployeePaymentMethod[]
+
+  @@index([companyId, status])
+  @@index([companyId, identity])
+  @@map("employees")
+  @@schema("app")
+}
+
+model EmployeePaymentMethod {
+  id         String                    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  employeeId String                    @map("employee_id") @db.Uuid
+  type       EmployeePaymentMethodType
+  bank       String
+  account    String?
+  phone      String?
+  identity   String?
+  createdAt  DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  employee   Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("employee_payment_methods")
   @@schema("app")
 }

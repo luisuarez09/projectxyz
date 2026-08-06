@@ -18,6 +18,8 @@ export type IvaBookDocumentInput = {
   vatRate: number;
   taxRateName: string;
   retentions: IvaBookRetentionInput[];
+  vatCreditStatus?: "PENDING" | "APPLIED" | "EXCLUDED" | null;
+  hasVatCredit?: boolean;
 };
 
 export type IvaBookCompany = {
@@ -146,6 +148,10 @@ function rateKind(document: IvaBookDocumentInput) {
 }
 
 function bucket(document: IvaBookDocumentInput, expected: "GENERAL" | "REDUCED" | "ADDITIONAL"): IvaTaxBucket {
+  const isExcluded = document.vatCreditStatus === "EXCLUDED" || document.hasVatCredit === false;
+  if (isExcluded) {
+    return { base: 0, rate: 0, tax: 0 };
+  }
   const documentRateKind = rateKind(document);
   const effectiveRate = document.vatRate > 0
     ? document.vatRate
@@ -177,6 +183,10 @@ function retentionTotals(retentions: IvaBookRetentionInput[]) {
 }
 
 function purchaseNoCreditAmount(document: IvaBookDocumentInput) {
+  const isExcluded = document.vatCreditStatus === "EXCLUDED" || document.hasVatCredit === false;
+  if (isExcluded) {
+    return rounded(document.totalAmount);
+  }
   const taxableWithoutTax = document.taxAmount === 0 ? document.taxableBase : 0;
   const classified = document.taxableBase + document.exemptAmount + document.nonTaxableAmount + document.taxAmount;
   const reconciliationDifference = Math.max(0, document.totalAmount - classified);

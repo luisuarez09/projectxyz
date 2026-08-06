@@ -1855,3 +1855,103 @@ export async function voidNextSalesInvoice(
     return serializeDocument(document);
   });
 }
+
+export async function deleteCommercialDocument(
+  auth: AuthContext,
+  rawDocumentId: string,
+) {
+  requirePermission(auth, permissions.commercialDocumentsManage);
+  const companyId = activeCompanyId(auth);
+  const documentId = z.uuid().parse(rawDocumentId);
+
+  return withAuthTransaction(auth, async (transaction) => {
+    const document = await transaction.commercialDocument.findFirst({
+      where: { id: documentId, companyId },
+      include: {
+        invoiceAttachment: true,
+        retentions: { include: { attachment: true } },
+        ivaDeclarations: true,
+      },
+    });
+
+    if (!document) {
+      throw new CommercialNotFoundError(
+        "La factura no existe en la empresa activa.",
+      );
+    }
+
+    if (document.type !== "PURCHASE") {
+      throw new CommercialConflictError(
+        "Solo las compras pueden ser eliminadas.",
+      );
+    }
+
+    if (
+      document.status !== "REGISTERED" ||
+      document.declaredAt ||
+      document.ivaDeclarations.length > 0
+    ) {
+      throw new CommercialConflictError(
+        "La compra ya fue declarada en el IVA o anulada y no puede ser eliminada.",
+      );
+    }
+
+    const attachmentKeys: string[] = [];
+    if (document.invoiceAttachment?.objectKey) {
+      attachmentKeys.push(document.invoiceAttachment.objectKey);
+    }
+    for (const retention of document.retentions) {
+      if (retention.attachment?.objectKey) {
+        attachmentKeys.push(retention.attachment.objectKey);
+      }
+    }
+
+    await transaction.commercialDocumentItem.deleteMany({
+      where: { documentId },
+    });
+    await transaction.commercialAccountingEntry.deleteMany({
+      where: { documentId },
+    });
+    await transaction.commercialRetention.deleteMany({
+      where: { documentId },
+    });
+
+    const attachmentIds = [
+      document.invoiceAttachmentId,
+      ...document.retentions.map((r) => r.attachmentId),
+    ].filter((id): id is string => Boolean(id));
+
+    await transaction.commercialDocument.delete({
+      where: { id: documentId },
+    });
+
+    if (attachmentIds.length > 0) {
+      await transaction.storedObject.deleteMany({
+        where: { id: { in: attachmentIds } },
+      });
+    }
+
+    await audit(
+      transaction,
+      auth,
+      "commercial.document.deleted",
+      "commercial_document",
+      documentId,
+      {
+        companyId,
+        type: routeDocumentType[document.type],
+        documentNumber: document.documentNumber,
+        impositionPeriod: document.impositionPeriod,
+      },
+    );
+
+    await Promise.all(
+      attachmentKeys.map((key) =>
+        deletePrivateObject(key).catch(() => undefined),
+      ),
+    );
+
+    return { success: true };
+  });
+}
+

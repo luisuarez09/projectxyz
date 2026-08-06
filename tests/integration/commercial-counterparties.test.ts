@@ -7,6 +7,7 @@ import {
   archiveCommercialParty,
   createCommercialDocument,
   createCommercialParty,
+  deleteCommercialDocument,
   getCommercialDocumentFormOptions,
   getCommercialPartyProfile,
   listCommercialParties,
@@ -105,7 +106,7 @@ describe("commercial counterparties backend", () => {
     await migrator.end();
   });
 
-  it("persists shared customer/supplier profiles and their invoice movements", async () => {
+  it("creates and updates commercial counterparties and registers sales with retentions", async () => {
     await expect(getCommercialDocumentFormOptions(auth, "sale")).resolves.toMatchObject({
       vatEnabled: false,
       vatRates: [],
@@ -282,4 +283,62 @@ describe("commercial counterparties backend", () => {
       status: "registered",
     });
   });
+
+  it("deletes an un-declared registered purchase document", async () => {
+    const supplier = await createCommercialParty(auth, {
+      kind: "supplier",
+      legalName: `Proveedor Borrado ${suffix}, C.A.`,
+      rif: `J-D${suffix}`,
+      fiscalAddress: "Maracay",
+      email: "",
+      phone: "0412-0000000",
+      primaryAccountId: accounts["2.1.01"],
+      counterpartAccountId: accounts["5.1.01"],
+    });
+
+    const purchase = await createCommercialDocument(auth, {
+      type: "purchase",
+      counterpartyId: supplier.id,
+      documentNumber: `FAC-DEL-${suffix}`,
+      issueDate: "2026-08-04",
+      currencyCode: "VES",
+      taxableBase: "100.000000",
+      exemptAmount: "0.000000",
+      nonTaxableAmount: "0.000000",
+      taxAmount: "16.000000",
+      totalAmount: "116.000000",
+      vatRateId: null,
+      hasVatCredit: true,
+      accountingEntries: [
+        {
+          accountId: accounts["5.1.01"],
+          debit: "100.000000",
+          credit: "0.000000",
+          source: "party",
+        },
+        {
+          accountId: accounts["1.1.02"],
+          debit: "16.000000",
+          credit: "0.000000",
+          source: "tax",
+        },
+        {
+          accountId: accounts["2.1.01"],
+          debit: "0.000000",
+          credit: "116.000000",
+          source: "counterpart",
+        },
+      ],
+    });
+
+    const deleteResult = await deleteCommercialDocument(auth, purchase.id);
+    expect(deleteResult).toEqual({ success: true });
+
+    const checkCount = await migrator.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM app.commercial_documents WHERE id = $1",
+      [purchase.id],
+    );
+    expect(Number(checkCount.rows[0].count)).toBe(0);
+  });
 });
+

@@ -177,6 +177,8 @@ export function CommercialInvoiceForm({
   const [existingIslrName, setExistingIslrName] = useState("");
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editable, setEditable] = useState(true);
   const [notice, setNotice] = useState("");
@@ -657,6 +659,31 @@ export function CommercialInvoiceForm({
     }
   };
 
+  const deletePurchase = async () => {
+    if (!documentId || !editable || deleting) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/commercial-documents?id=${documentId}`,
+        { method: "DELETE" },
+      );
+      const body = await response.json();
+      if (!response.ok)
+        throw new Error(body.error ?? "No fue posible eliminar la compra.");
+      window.location.assign("/operaciones/compras");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "No fue posible eliminar la compra.",
+      );
+      setDeleteOpen(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const createParty = async (draft: {
     legalName: string;
     rif: string;
@@ -684,7 +711,7 @@ export function CommercialInvoiceForm({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
-            className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900"
+            className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
             href={isSale ? "/operaciones/ventas" : "/operaciones/compras"}
           >
             <ArrowLeft size={16} /> Volver a {isSale ? "ventas" : "compras"}
@@ -698,6 +725,17 @@ export function CommercialInvoiceForm({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {documentId && !isSale && editable && (
+            <Button
+              className="border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
+              disabled={saving || deleting}
+              onClick={() => setDeleteOpen(true)}
+              type="button"
+              variant="outline"
+            >
+              <Trash2 size={16} /> Eliminar compra
+            </Button>
+          )}
           <Button
             disabled={!canSave || saving}
             onClick={() => void save()}
@@ -706,7 +744,7 @@ export function CommercialInvoiceForm({
             <Save size={16} /> {saving ? "Guardando…" : "Guardar"}
           </Button>
           <Button
-            className="bg-[#14352d]"
+            className="bg-[#14352d] text-white hover:bg-[#0e2821] dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-900"
             disabled={!canSave || saving}
             onClick={() => void save("new")}
           >
@@ -719,19 +757,19 @@ export function CommercialInvoiceForm({
         </div>
       </div>
       {notice && (
-        <p className="mt-5 flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        <p className="mt-5 flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200">
           <CheckCircle2 size={17} />
           {notice}
         </p>
       )}
       {error && (
-        <p className="mt-5 flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+        <p className="mt-5 flex gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/60 dark:text-rose-300">
           <CircleAlert size={17} />
           {error}
         </p>
       )}
       {!editable && documentId && (
-        <p className="mt-5 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <p className="mt-5 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-200">
           <CircleAlert size={17} /> Esta factura ya fue declarada o anulada. Se
           muestra en modo de consulta y no admite cambios.
         </p>
@@ -780,7 +818,7 @@ export function CommercialInvoiceForm({
                         {filteredParties.map((party, index) => (
                           <button
                             aria-selected={index === activeOption}
-                            className={`block w-full rounded-lg px-3 py-2 text-left ${index === activeOption ? "bg-[#e7f0e9] dark:bg-emerald-950" : "hover:bg-stone-50 dark:hover:bg-stone-800"}`}
+                            className={`block w-full rounded-lg px-3 py-2 text-left ${index === activeOption ? "bg-[#e7f0e9] text-[#14352d] dark:bg-emerald-950 dark:text-emerald-200" : "hover:bg-stone-50 dark:hover:bg-stone-800"}`}
                             id={`party-option-${index}`}
                             key={party.id}
                             onMouseDown={(event) => event.preventDefault()}
@@ -820,7 +858,7 @@ export function CommercialInvoiceForm({
               </div>
               <Field label="N.º de factura *">
                 <Input
-                  className={`field mt-1.5 ${isSale ? "bg-stone-50" : ""}`}
+                  className={`field mt-1.5 ${isSale ? "bg-stone-50 dark:bg-stone-800/50" : ""}`}
                   onChange={(event) =>
                     !isSale &&
                     setInvoiceNumber(event.target.value.toUpperCase())
@@ -833,7 +871,7 @@ export function CommercialInvoiceForm({
                 />
                 {isSale && (
                   <button
-                    className="mt-1 text-xs font-medium text-rose-600"
+                    className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400"
                     onClick={() => setVoidOpen(true)}
                     type="button"
                   >
@@ -862,7 +900,7 @@ export function CommercialInvoiceForm({
                 </SimpleSelect>
               </Field>
               <Field label="Período de imposición">
-                <div className="mt-1.5 flex h-9 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm">
+                <div className="mt-1.5 flex h-9 items-center rounded-md border border-stone-200 bg-stone-50 px-3 text-sm dark:border-stone-700 dark:bg-stone-800/50 dark:text-stone-300">
                   {date.slice(0, 7)}
                 </div>
               </Field>
@@ -877,7 +915,7 @@ export function CommercialInvoiceForm({
               <div className="space-y-3">
                 {items.map((item) => (
                   <div
-                    className="grid gap-2 rounded-xl border border-stone-200 p-3 md:grid-cols-[minmax(12rem,1fr)_6rem_9rem_8rem_2rem] md:items-end"
+                    className="grid gap-2 rounded-xl border border-stone-200 p-3 dark:border-stone-800 md:grid-cols-[minmax(12rem,1fr)_6rem_9rem_8rem_2rem] md:items-end"
                     key={item.id}
                   >
                     <Field label="Descripción">
@@ -1025,7 +1063,7 @@ export function CommercialInvoiceForm({
                   />
                 </Field>
               </div>
-              <label className="mt-4 flex w-fit cursor-pointer items-start gap-3 rounded-lg border border-stone-200 px-3 py-2.5">
+              <label className="mt-4 flex w-fit cursor-pointer items-start gap-3 rounded-lg border border-stone-200 px-3 py-2.5 dark:border-stone-700">
                 <input
                   checked={hasVatCredit}
                   className="mt-0.5 size-4 accent-[#14352d]"
@@ -1049,7 +1087,7 @@ export function CommercialInvoiceForm({
             title="Distribución contable"
             description="Cuenta + monto. El Debe o Haber se determina por la naturaleza de cada cuenta."
           >
-            <div className="grid grid-cols-[minmax(0,1fr)_9rem_2.25rem] gap-2 px-1 text-xs text-stone-500">
+            <div className="grid grid-cols-[minmax(0,1fr)_9rem_2.25rem] gap-2 px-1 text-xs text-stone-500 dark:text-stone-400">
               <span>Cuenta</span>
               <span className="text-right">Monto</span>
               <span />
@@ -1143,7 +1181,7 @@ export function CommercialInvoiceForm({
                 Las cuentas del tercero y del IVA se proponen automáticamente.
               </p>
             </div>
-            <div className="mt-4 grid gap-2 border-t border-stone-200 pt-4 text-sm sm:grid-cols-3">
+            <div className="mt-4 grid gap-2 border-t border-stone-200 pt-4 text-sm dark:border-stone-800 sm:grid-cols-3">
               <p>
                 Débitos: <strong>{money(sideTotals.debit)}</strong>
               </p>
@@ -1151,13 +1189,13 @@ export function CommercialInvoiceForm({
                 Créditos: <strong>{money(sideTotals.credit)}</strong>
               </p>
               <p
-                className={`sm:text-right ${balanced ? "text-emerald-700" : "text-amber-700"}`}
+                className={`sm:text-right ${balanced ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}
               >
                 {balanced ? "Cuadrado" : `Descuadre: ${money(difference)}`}
               </p>
             </div>
             {!accountReady && selectedParty && (
-              <p className="mt-3 text-xs text-rose-600">
+              <p className="mt-3 text-xs text-rose-600 dark:text-rose-400">
                 Selecciona cuentas activas y completa cada monto. La cuenta de
                 IVA debe estar configurada en Configuración → Empresa activa →
                 Plan de cuentas.
@@ -1280,7 +1318,7 @@ export function CommercialInvoiceForm({
                           value={islrAmount}
                         />
                       </Field>
-                      <p className="text-xs text-amber-700">
+                      <p className="text-xs text-amber-700 dark:text-amber-300">
                         No se calcula automáticamente hasta configurar concepto,
                         porcentaje, sustraendo, fuente y vigencia.
                       </p>
@@ -1300,7 +1338,7 @@ export function CommercialInvoiceForm({
           )}
         </fieldset>
 
-        <aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm xl:sticky xl:top-22">
+        <aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900 xl:sticky xl:top-22">
           <p className="font-semibold">Revisión de la factura</p>
           <dl className="mt-4 space-y-3 text-sm">
             <Row
@@ -1325,7 +1363,7 @@ export function CommercialInvoiceForm({
               value={`${currency} ${money(tax)}`}
             />
           </dl>
-          <div className="my-5 border-t border-stone-200" />
+          <div className="my-5 border-t border-stone-200 dark:border-stone-800" />
           <p className="text-xs uppercase tracking-wide text-stone-500">
             Total
           </p>
@@ -1333,7 +1371,7 @@ export function CommercialInvoiceForm({
             {currency} {money(total)}
           </p>
           {taxableBase > 0 && vatEnabled && !selectedRate && (
-            <p className="mt-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
+            <p className="mt-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
               Falta una alícuota de IVA activa y vigente para esta fecha.
             </p>
           )}
@@ -1348,7 +1386,7 @@ export function CommercialInvoiceForm({
             </p>
           )}
           {!isSale && tax > 0 && (
-            <p className="mt-4 rounded-lg bg-sky-50 p-3 text-xs text-sky-800">
+            <p className="mt-4 rounded-lg bg-sky-50 p-3 text-xs text-sky-800 dark:bg-sky-950/60 dark:text-sky-200">
               {hasVatCredit
                 ? "Crédito fiscal pendiente de decidir en la declaración."
                 : "IVA incorporado al costo, sin derecho a crédito fiscal."}
@@ -1367,7 +1405,7 @@ export function CommercialInvoiceForm({
       )}
       {voidOpen && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-stone-950/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl dark:border dark:border-stone-800 dark:bg-stone-900">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-semibold">
@@ -1408,6 +1446,36 @@ export function CommercialInvoiceForm({
           </div>
         </div>
       )}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="p-6 sm:max-w-md">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="text-lg font-semibold">¿Confirmar eliminación de compra?</DialogTitle>
+            <DialogDescription className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-300">
+              Esta acción eliminará permanentemente la compra{" "}
+              {invoiceNumber ? `N° ${invoiceNumber}` : ""} registrada y sus asientos
+              contables. Esta operación no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              disabled={deleting}
+              onClick={() => setDeleteOpen(false)}
+              type="button"
+              variant="outline"
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={deleting}
+              onClick={() => void deletePurchase()}
+              type="button"
+              variant="destructive"
+            >
+              {deleting ? "Eliminando…" : "Eliminar compra"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1569,7 +1637,7 @@ function RetentionCard({
 }) {
   return (
     <article
-      className={`rounded-xl border p-4 ${enabled ? "border-[#14352d] bg-[#e7f0e9]/40" : "border-stone-200"}`}
+      className={`rounded-xl border p-4 ${enabled ? "border-[#14352d] bg-[#e7f0e9]/40 dark:border-emerald-800 dark:bg-emerald-950/20" : "border-stone-200 dark:border-stone-800"}`}
     >
       <button
         aria-pressed={enabled}
@@ -1579,7 +1647,7 @@ function RetentionCard({
       >
         <span className="font-semibold">{title}</span>
         <span
-          className={`rounded-full px-2 py-1 text-xs ${enabled ? "bg-[#14352d] text-white" : "bg-stone-100 text-stone-500"}`}
+          className={`rounded-full px-2 py-1 text-xs ${enabled ? "bg-[#14352d] text-white dark:bg-emerald-950 dark:text-emerald-200" : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"}`}
         >
           {enabled ? "Incluida" : "No recibida"}
         </span>

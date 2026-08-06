@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { commercialError } from "@/app/api/counterparties/commercial-error";
 import {
   createCommercialDocument,
+  deleteCommercialDocument,
   getCommercialDocument,
   getCommercialDocumentFormOptions,
   listCommercialDocuments,
@@ -100,3 +101,16 @@ export async function POST(request: Request) {
     return commercialError(error);
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const documentId = url.searchParams.get("id") ?? "";
+    const auth = await resolveAuthContext(request.headers);
+    const result = await deleteCommercialDocument(auth, documentId);
+    return NextResponse.json(result);
+  } catch (error) {
+    return commercialError(error);
+  }
+}
+

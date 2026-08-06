@@ -229,7 +229,7 @@ function PurchasesTab({ closed, data, selected, setSelected, toggle, totals, all
   const totalSelectedPurchasesAmount = selectedPurchaseItems.reduce((sum, item) => sum + amount(item.totalAmount), 0);
   const totalSelectedNoCreditAmount = selectedPurchaseItems.reduce((sum, item) => {
     const isCreditable = item.hasVatCredit ?? (item.vatCreditStatus === "PENDING" && amount(item.taxAmount) > 0);
-    return sum + (isCreditable ? 0 : (amount(item.taxableBase) + amount(item.exemptAmount) + amount(item.nonTaxableAmount)));
+    return sum + (isCreditable ? (amount(item.exemptAmount) + amount(item.nonTaxableAmount)) : amount(item.totalAmount));
   }, 0);
 
   return (
@@ -480,7 +480,7 @@ function SeniatFormTab({ data, selectedPurchases, totals }: { data: Workspace; s
 
   const noCreditPurchasesBase = selectedPurchaseItems.reduce((sum, item) => {
     const isCreditable = item.hasVatCredit ?? (item.vatCreditStatus === "PENDING" && amount(item.taxAmount) > 0);
-    return sum + (isCreditable ? 0 : (amount(item.taxableBase) + amount(item.exemptAmount) + amount(item.nonTaxableAmount)));
+    return sum + (isCreditable ? (amount(item.exemptAmount) + amount(item.nonTaxableAmount)) : amount(item.totalAmount));
   }, 0);
 
   const creditablePurchasesBase = selectedPurchaseItems.reduce((sum, item) => {
@@ -573,7 +573,7 @@ function SeniatFormTab({ data, selectedPurchases, totals }: { data: Workspace; s
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
-              <SeniatRow num="10" concept="Compras no Gravadas y/o sin Derecho a Crédito Fiscal" boxBase="30" valBase={noCreditPurchasesBase} note="Incluye compras exentas y sin derecho a crédito fiscal" badge />
+              <SeniatRow num="10" concept="Compras no Gravadas y/o sin Derecho a Crédito Fiscal" boxBase="30" valBase={noCreditPurchasesBase} note="Incluye compras exentas y compras sin derecho a crédito fiscal (neteadas con su IVA)" badge />
               <SeniatRow num="11" concept="Importaciones Gravadas por Alícuota General" boxBase="31" valBase={0} boxTax="32" valTax={0} />
               <SeniatRow num="12" concept="Importaciones Gravadas por Alícuota General más Adicional" boxBase="312" valBase={0} boxTax="322" valTax={0} />
               <SeniatRow num="13" concept="Importaciones Gravadas por Alícuota Reducida" boxBase="313" valBase={0} boxTax="323" valTax={0} />

@@ -142,7 +142,13 @@ export function FiscalMatrix({ tv = false, initialPeriod }: { tv?: boolean; init
           {loading ? <div className="flex min-h-80 items-center justify-center gap-2 text-sm"><LoaderCircle className="animate-spin" size={18} /> Cargando empresas y expedientes…</div> : rows.length ? <>
             <div className="hidden overflow-x-auto lg:block">
               <Table className="w-full min-w-max border-separate border-spacing-0 text-left">
-                <TableHeader className={tv ? "bg-emerald-950/50" : "bg-stone-50 dark:bg-stone-800"}><TableRow><TableHead className="sticky left-0 z-10 min-w-72 px-4 py-3 text-xs font-semibold uppercase tracking-wide">Empresa</TableHead>{columns.map((column) => <TableHead className="min-w-32 px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide" key={column.id}>{column.name}</TableHead>)}<TableHead className="min-w-28 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide">Riesgo</TableHead></TableRow></TableHeader>
+                <TableHeader className={tv ? "bg-[#0b241c]" : "bg-stone-50 dark:bg-stone-800"}>
+                  <TableRow>
+                    <TableHead className={`sticky left-0 z-20 min-w-72 px-4 py-3 text-xs font-semibold uppercase tracking-wide ${tv ? "bg-[#0b241c]" : "bg-stone-50 dark:bg-stone-800"}`}>Empresa</TableHead>
+                    {columns.map((column) => <TableHead className="min-w-32 px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide" key={column.id}>{column.name}</TableHead>)}
+                    <TableHead className="min-w-28 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide">Riesgo</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>{rows.map(({ company, cells }) => <TableRow className={tv ? "border-t border-emerald-950" : "border-t border-stone-100 dark:border-stone-800"} key={company.id}><TableCell className={`sticky left-0 z-10 px-4 py-3 ${tv ? "bg-[#102a22]" : "bg-white dark:bg-stone-900"}`}><p className="text-sm font-semibold">{company.legalName}</p><p className={`mt-0.5 text-xs ${tv ? "text-emerald-200" : "text-stone-500"}`}>{company.activity} · {company.responsibleName}</p></TableCell>{cells.map((cell, index) => <TableCell className="px-1.5 py-2" key={`${company.id}-${columns[index].id}`}><MatrixMark cell={cell} /></TableCell>)}<TableCell className="px-3 py-2 text-center"><Risk cells={cells} /></TableCell></TableRow>)}</TableBody>
               </Table>
             </div>

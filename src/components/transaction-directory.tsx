@@ -255,16 +255,16 @@ export function TransactionDirectory({ kind }: { kind: Kind }) {
         />
       </div>
       {!isPurchase && (
-        <div className="mt-6 flex gap-1 border-b border-stone-200">
+        <div className="mt-6 flex gap-1 border-b border-stone-200 dark:border-stone-800">
           <button
-            className={`border-b-2 px-3 py-3 text-sm font-medium ${tab === "invoices" ? "border-[#14352d] text-[#14352d]" : "border-transparent text-stone-500"}`}
+            className={`border-b-2 px-3 py-3 text-sm font-medium ${tab === "invoices" ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500"}`}
             onClick={() => changeTab("invoices")}
             type="button"
           >
             Facturas · {documents.length}
           </button>
           <button
-            className={`border-b-2 px-3 py-3 text-sm font-medium ${tab === "retentions" ? "border-[#14352d] text-[#14352d]" : "border-transparent text-stone-500"}`}
+            className={`border-b-2 px-3 py-3 text-sm font-medium ${tab === "retentions" ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500"}`}
             onClick={() => changeTab("retentions")}
             type="button"
           >
@@ -328,7 +328,7 @@ export function TransactionDirectory({ kind }: { kind: Kind }) {
         )}
         {!loading && !error && !totalRows && (
           <div className="p-12 text-center">
-            <FileText className="mx-auto text-stone-300" size={28} />
+            <FileText className="mx-auto text-stone-300 dark:text-stone-700" size={28} />
             <p className="mt-3 font-medium">Aún no hay registros</p>
             <p className="mt-1 text-sm text-stone-500">
               La primera operación aparecerá aquí al guardarse.
@@ -362,7 +362,7 @@ export function TransactionDirectory({ kind }: { kind: Kind }) {
             <div className="flex items-center gap-2">
               <button
                 aria-label="Página anterior"
-                className="grid size-8 place-items-center rounded-lg border border-stone-200 disabled:opacity-40"
+                className="grid size-8 place-items-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-40 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
                 disabled={currentPage === 1}
                 onClick={() => setPage((value) => Math.max(1, value - 1))}
                 type="button"
@@ -374,7 +374,7 @@ export function TransactionDirectory({ kind }: { kind: Kind }) {
               </span>
               <button
                 aria-label="Página siguiente"
-                className="grid size-8 place-items-center rounded-lg border border-stone-200 disabled:opacity-40"
+                className="grid size-8 place-items-center rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-40 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
                 disabled={currentPage === pages}
                 onClick={() => setPage((value) => Math.min(pages, value + 1))}
                 type="button"
@@ -401,7 +401,7 @@ function InvoiceTable({
   return (
     <div className="overflow-x-auto">
       <Table className="min-w-[980px]">
-        <TableHeader className="bg-stone-50 text-xs text-stone-500">
+        <TableHeader className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/70 dark:text-stone-400">
           <TableRow>
             <TableHead className="px-5 py-3">Factura</TableHead>
             <TableHead className="px-3 py-3">Fecha / período</TableHead>
@@ -414,13 +414,13 @@ function InvoiceTable({
             <TableHead className="px-5 py-3">Estado</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody className="divide-y divide-stone-100">
+        <TableBody className="divide-y divide-stone-100 dark:divide-stone-800">
           {rows.map((document) => (
             <TableRow
               className={
                 document.status === "voided"
                   ? ""
-                  : "cursor-pointer hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#14352d]"
+                  : "cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-800/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#14352d]"
               }
               key={document.id}
               onClick={() => {
@@ -469,7 +469,7 @@ function InvoiceTable({
                   </>
                 ) : (
                   <>
-                    <p className="font-medium text-rose-700">
+                    <p className="font-medium text-rose-700 dark:text-rose-400">
                       Correlativo anulado
                     </p>
                     <p className="mt-1 max-w-56 text-xs text-stone-500">
@@ -522,7 +522,7 @@ function RetentionTable({
   return (
     <div className="overflow-x-auto">
       <Table className="min-w-[900px]">
-        <TableHeader className="bg-stone-50 text-xs text-stone-500">
+        <TableHeader className="bg-stone-50 text-xs text-stone-500 dark:bg-stone-800/70 dark:text-stone-400">
           <TableRow>
             <TableHead className="px-5 py-3">Comprobante</TableHead>
             <TableHead className="px-3 py-3">Tipo</TableHead>
@@ -532,14 +532,14 @@ function RetentionTable({
             <TableHead className="px-5 py-3">Soporte</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody className="divide-y divide-stone-100">
+        <TableBody className="divide-y divide-stone-100 dark:divide-stone-800">
           {rows.map((retention) => (
             <TableRow key={retention.id}>
               <TableCell className="px-5 py-4 font-semibold">
                 {retention.receiptNumber}
               </TableCell>
               <TableCell className="px-3 py-4">
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#e7f0e9] px-2 py-1 text-xs font-medium text-[#14352d]">
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#e7f0e9] px-2 py-1 text-xs font-medium text-[#14352d] dark:bg-emerald-950 dark:text-emerald-300">
                   <ShieldCheck size={12} /> {retention.type}
                 </span>
               </TableCell>
@@ -560,11 +560,11 @@ function RetentionTable({
               </TableCell>
               <TableCell className="px-5 py-4">
                 {retention.attachment ? (
-                  <span className="flex items-center gap-1 text-xs text-stone-600">
+                  <span className="flex items-center gap-1 text-xs text-stone-600 dark:text-stone-300">
                     <Paperclip size={12} /> {retention.attachment.name}
                   </span>
                 ) : (
-                  <span className="text-xs text-stone-400">Sin soporte</span>
+                  <span className="text-xs text-stone-400 dark:text-stone-500">Sin soporte</span>
                 )}
               </TableCell>
             </TableRow>
@@ -599,10 +599,10 @@ function Status({
   tone: "emerald" | "rose" | "sky" | "stone";
 }) {
   const classes = {
-    emerald: "bg-emerald-50 text-emerald-700",
-    rose: "bg-rose-50 text-rose-700",
-    sky: "bg-sky-50 text-sky-700",
-    stone: "bg-stone-100 text-stone-700",
+    emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300",
+    rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300",
+    sky: "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300",
+    stone: "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300",
   };
   return (
     <span

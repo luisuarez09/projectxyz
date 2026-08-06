@@ -69,6 +69,7 @@ function bookDocument(item: {
   taxAmount: { toString(): string };
   totalAmount: { toString(): string };
   vatRate: { toString(): string } | null;
+  vatCreditStatus?: "PENDING" | "APPLIED" | "EXCLUDED" | null;
   counterparty: { legalName: string; rif: string } | null;
   taxRate: { name: string } | null;
   retentions: Array<{
@@ -95,6 +96,8 @@ function bookDocument(item: {
       percentage: decimal(retention.percentage),
       amount: decimal(retention.amount),
     })),
+    vatCreditStatus: item.vatCreditStatus,
+    hasVatCredit: item.vatCreditStatus !== "EXCLUDED",
   };
 }
 

@@ -25,6 +25,8 @@ const updateSchema = z.object({
   filedAt: z.union([z.iso.date(), z.literal("")]).optional().default(""),
   declaredAmount: z.union([moneySchema, z.literal("")]).optional().default(""),
   confirmDifference: z.boolean().optional().default(false),
+  previousFiscalCredit: z.union([moneySchema, z.literal("")]).optional(),
+  previousRetentionCredit: z.union([moneySchema, z.literal("")]).optional(),
 });
 
 const evidenceLabels: Record<string, string> = {
@@ -427,8 +429,12 @@ export async function updateIvaDeclaration(auth: AuthContext, rawInput: unknown)
         sales: sales.map((item) => ({ taxableBase: decimal(item.taxableBase), exemptAmount: decimal(item.exemptAmount), taxAmount: decimal(item.taxAmount) })),
         purchases: purchases.map((item) => ({ taxAmount: item.vatCreditStatus === "PENDING" ? decimal(item.taxAmount) : 0 })),
         retentions: retentions.map((item) => ({ amount: decimal(item.amount) })),
-        previousFiscalCredit: decimal(declaration.previousFiscalCredit),
-        previousRetentionCredit: decimal(declaration.previousRetentionCredit),
+        previousFiscalCredit: input.previousFiscalCredit !== undefined && input.previousFiscalCredit !== "" 
+          ? decimal(input.previousFiscalCredit) 
+          : decimal(declaration.previousFiscalCredit),
+        previousRetentionCredit: input.previousRetentionCredit !== undefined && input.previousRetentionCredit !== ""
+          ? decimal(input.previousRetentionCredit)
+          : decimal(declaration.previousRetentionCredit),
       });
       const declaredAmount = input.declaredAmount ? Number(input.declaredAmount.replace(",", ".")) : totals.taxPayable;
       if (input.action === "close") {
@@ -519,6 +525,8 @@ export async function updateIvaDeclaration(auth: AuthContext, rawInput: unknown)
           retentionCreditCarryforward: totals.retentionCreditCarryforward,
           determinedAt: input.action === "close" ? now : declaration.determinedAt,
           version: { increment: 1 },
+          ...(input.previousFiscalCredit !== undefined && input.previousFiscalCredit !== "" ? { previousFiscalCredit: decimal(input.previousFiscalCredit) } : {}),
+          ...(input.previousRetentionCredit !== undefined && input.previousRetentionCredit !== "" ? { previousRetentionCredit: decimal(input.previousRetentionCredit) } : {}),
         },
       });
       await transaction.complianceCase.update({
@@ -579,7 +587,8 @@ export async function listDeclarations(auth: AuthContext) {
           offeringKind: "TAX",
           suppressedAt: null,
           OR: [
-            { periodMonth: { lte: currentPeriodEnd } },
+            { dueDate: { lte: currentPeriodEnd } },
+            { dueDate: null, periodMonth: { lte: currentPeriodEnd } },
             { status: { not: "PENDING" } },
           ],
         },

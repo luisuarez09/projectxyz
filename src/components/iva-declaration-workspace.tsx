@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, ArrowLeft, BadgeCheck, BookOpen, Calculator, Check, CircleCheck, FileCheck2, FileClock, FileSpreadsheet, FileText, LoaderCircle, LockKeyhole, ReceiptText, RefreshCw, Save, ShieldCheck, ShoppingCart, TrendingUp } from "lucide-react";
+import { AlertCircle, ArrowLeft, BadgeCheck, BookOpen, Calculator, Check, CircleCheck, FileCheck2, FileClock, FileSpreadsheet, FileText, LoaderCircle, LockKeyhole, Pencil, ReceiptText, RefreshCw, Save, ShieldCheck, ShoppingCart, TrendingUp, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -43,13 +43,13 @@ function displayDate(value: string) {
   return value ? date.format(new Date(`${value}T00:00:00.000Z`)) : "—";
 }
 
-function calculate(data: Workspace | null, selectedPurchases: Set<string>, selectedRetentions: Set<string>) {
+function calculate(data: Workspace | null, selectedPurchases: Set<string>, selectedRetentions: Set<string>, customPreviousFiscalCredit?: string, customPreviousRetentionCredit?: string) {
   const sales = data?.sales ?? [];
   const purchases = (data?.purchases ?? []).filter(({ id }) => selectedPurchases.has(id));
   const retentions = (data?.retentions ?? []).filter(({ id }) => selectedRetentions.has(id));
   const nonTaxableAmount = sales.reduce((sum, item) => sum + amount(item.nonTaxableAmount), 0);
-  const previousFiscalCredit = amount(data?.declaration.previousFiscalCredit);
-  const previousRetentionCredit = amount(data?.declaration.previousRetentionCredit);
+  const previousFiscalCredit = amount(customPreviousFiscalCredit !== undefined && customPreviousFiscalCredit !== "" ? customPreviousFiscalCredit : data?.declaration.previousFiscalCredit);
+  const previousRetentionCredit = amount(customPreviousRetentionCredit !== undefined && customPreviousRetentionCredit !== "" ? customPreviousRetentionCredit : data?.declaration.previousRetentionCredit);
   return {
     ...calculateIvaDetermination({
       sales: sales.map((item) => ({ taxableBase: amount(item.taxableBase), exemptAmount: amount(item.exemptAmount), taxAmount: amount(item.taxAmount) })),
@@ -80,6 +80,8 @@ export function IvaDeclarationWorkspace({ period }: { period: string }) {
   const [confirmDifference, setConfirmDifference] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<EvidenceKind | null>(null);
+  const [customPreviousFiscalCredit, setCustomPreviousFiscalCredit] = useState("");
+  const [customPreviousRetentionCredit, setCustomPreviousRetentionCredit] = useState("");
 
   const applyWorkspace = useCallback((workspace: Workspace) => {
     setData(workspace);
@@ -111,7 +113,7 @@ export function IvaDeclarationWorkspace({ period }: { period: string }) {
 
   useEffect(() => { if (!companyLoading) void load(); }, [companyLoading, load]);
 
-  const totals = useMemo(() => calculate(data, selectedPurchases, selectedRetentions), [data, selectedPurchases, selectedRetentions]);
+  const totals = useMemo(() => calculate(data, selectedPurchases, selectedRetentions, customPreviousFiscalCredit, customPreviousRetentionCredit), [data, selectedPurchases, selectedRetentions, customPreviousFiscalCredit, customPreviousRetentionCredit]);
   const closed = data ? ["SUBMITTED", "PAID", "CLOSED"].includes(data.declaration.status) : false;
   const allPurchasesSelected = Boolean(data?.purchases.length) && selectedPurchases.size === data?.purchases.length;
   const allRetentionsSelected = Boolean(data?.retentions.length) && selectedRetentions.size === data?.retentions.length;
@@ -192,7 +194,7 @@ export function IvaDeclarationWorkspace({ period }: { period: string }) {
 
       <nav className="mt-6 flex gap-1 overflow-x-auto border-b border-stone-200 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden dark:border-stone-800" aria-label="Secciones de la declaración">{[["determination", "Determinación"], ["sales", `Ventas (${data.sales.length})`], ["purchases", `Compras (${data.purchases.length})`], ["retentions", `Retenciones (${data.retentions.length})`], ["books", "Libros fiscales"], ["seniatForm", "Guía SENIAT (Forma 99030)"], ["closing", "Presentación y cierre"]].map(([id, label]) => <button className={`shrink-0 border-b-2 px-3 py-3 text-sm font-medium ${tab === id ? "border-[#14352d] text-[#14352d] dark:border-emerald-300 dark:text-emerald-200" : "border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"}`} key={id} onClick={() => setTab(id as typeof tab)} type="button">{label}</button>)}</nav>
 
-      {tab === "determination" && <Determination data={data} onGo={setTab} totals={totals} />}
+      {tab === "determination" && <Determination data={data} onGo={setTab} totals={totals} closed={closed} customPreviousFiscalCredit={customPreviousFiscalCredit} setCustomPreviousFiscalCredit={setCustomPreviousFiscalCredit} customPreviousRetentionCredit={customPreviousRetentionCredit} setCustomPreviousRetentionCredit={setCustomPreviousRetentionCredit} />}
       {tab === "sales" && <SalesTab sales={data.sales} totals={totals} />}
       {tab === "purchases" && <PurchasesTab closed={closed} data={data} selected={selectedPurchases} setSelected={setSelectedPurchases} toggle={(id) => toggle(setSelectedPurchases, id)} totals={totals} allSelected={allPurchasesSelected} />}
       {tab === "retentions" && <RetentionsTab closed={closed} data={data} selected={selectedRetentions} setSelected={setSelectedRetentions} toggle={(id) => toggle(setSelectedRetentions, id)} totals={totals} allSelected={allRetentionsSelected} />}
@@ -205,13 +207,13 @@ export function IvaDeclarationWorkspace({ period }: { period: string }) {
 
 type Totals = ReturnType<typeof calculate>;
 
-function Determination({ data, totals, onGo }: { data: Workspace; totals: Totals; onGo: (tab: "purchases" | "retentions" | "closing" | "seniatForm") => void }) {
+function Determination({ data, totals, onGo, closed, customPreviousFiscalCredit, setCustomPreviousFiscalCredit, customPreviousRetentionCredit, setCustomPreviousRetentionCredit }: { data: Workspace; totals: Totals; onGo: (tab: "purchases" | "retentions" | "closing" | "seniatForm") => void; closed: boolean; customPreviousFiscalCredit: string; setCustomPreviousFiscalCredit: (val: string) => void; customPreviousRetentionCredit: string; setCustomPreviousRetentionCredit: (val: string) => void }) {
   return <section className="mt-6 space-y-5">
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={TrendingUp} label="Débito fiscal" value={money.format(totals.debitTax)} detail={`${data.sales.length} ventas del período`} tone="stone" /><Metric icon={ShoppingCart} label="Crédito deducible" value={money.format(totals.deductibleTaxCredit)} detail={totals.prorationFactor === null ? `${totals.purchaseTaxCredit ? "Sin prorrateo" : "Sin compras seleccionadas"}` : `Prorrateado a ${number.format(totals.prorationFactor * 100)} %`} tone="sky" /><Metric icon={ShieldCheck} label="Retenciones disponibles" value={money.format(totals.retentionCreditsAvailable)} detail="Actuales más saldo anterior" tone="violet" /><Metric icon={Calculator} label="Resultado a pagar" value={money.format(totals.taxPayable)} detail={totals.taxPayable > 0 ? "Antes de presentación" : "Sin impuesto a pagar"} tone="emerald" /></div>
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900"><header className="border-b border-stone-100 p-5 dark:border-stone-800"><h2 className="font-semibold">Secuencia de determinación</h2><p className="mt-1 text-sm text-stone-500">Separa la actividad del período, los saldos recibidos y lo que se trasladará al siguiente expediente.</p></header><div className="space-y-0 px-5">
         <GroupTitle number="1" title="Actividad del período" /><Line label="Débito fiscal de ventas gravadas" value={money.format(totals.debitTax)} detail={`Base gravada ${money.format(totals.taxableBase)}`} /><Line label="Crédito fiscal de compras seleccionadas" value={`(${money.format(totals.purchaseTaxCredit)})`} />{totals.prorationFactor !== null && <><Line label="Factor de prorrateo" value={`${number.format(totals.prorationFactor * 100)} %`} detail="Ventas gravadas ÷ ventas gravadas y exentas" /><Line label="Crédito fiscal deducible" value={`(${money.format(totals.deductibleTaxCredit)})`} /></>}
-        <GroupTitle number="2" title="Saldos a favor recibidos" /><Line label="Crédito fiscal de períodos anteriores" value={`(${money.format(totals.previousFiscalCredit)})`} detail="Resultado cerrado del período anterior" /><Line label="Retenciones acumuladas anteriores" value={`(${money.format(totals.previousRetentionCredit)})`} detail="Saldo no consumido en la declaración anterior" /><Line label="Retenciones seleccionadas en este expediente" value={`(${money.format(totals.currentRetentionCredit)})`} detail="Solo se consumirán al cerrar" />
+        <GroupTitle number="2" title="Saldos a favor recibidos" /><EditableLine label="Crédito fiscal de períodos anteriores" value={`(${money.format(totals.previousFiscalCredit)})`} detail="Resultado cerrado del período anterior" editableValue={customPreviousFiscalCredit} onSave={setCustomPreviousFiscalCredit} closed={closed} /><EditableLine label="Retenciones acumuladas anteriores" value={`(${money.format(totals.previousRetentionCredit)})`} detail="Saldo no consumido en la declaración anterior" editableValue={customPreviousRetentionCredit} onSave={setCustomPreviousRetentionCredit} closed={closed} /><Line label="Retenciones seleccionadas en este expediente" value={`(${money.format(totals.currentRetentionCredit)})`} detail="Solo se consumirán al cerrar" />
         <GroupTitle number="3" title="Resultado de esta declaración" /><Line strong label="Impuesto determinado a pagar" value={money.format(totals.taxPayable)} /><Line label="Crédito fiscal para el próximo período" value={money.format(totals.fiscalCreditCarryforward)} detail="Se trasladará al cerrar" /><Line label="Retenciones para el próximo período" value={money.format(totals.retentionCreditCarryforward)} detail="Se trasladarán al cerrar" />
       </div></section>
       <aside className="space-y-4"><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Composición de ventas</p><div className="mt-4 space-y-3"><Progress label="Gravadas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.taxableBase} tone="emerald" /><Progress label="Exentas / exoneradas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.exemptAmount} tone="amber" /><Progress label="No sujetas" total={totals.taxableBase + totals.exemptAmount + totals.nonTaxableAmount} value={totals.nonTaxableAmount} tone="stone" /></div>{totals.prorationFactor !== null && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800 dark:bg-amber-950 dark:text-amber-200">Hay operaciones gravadas y exentas. La plantilla aplica prorrateo al crédito de compras; valida la fuente y vigencia antes del cierre.</p>}</section><section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm dark:border-stone-800 dark:bg-stone-900"><p className="font-semibold">Continuar el expediente</p><div className="mt-3 grid gap-2"><Button className="justify-between" onClick={() => onGo("purchases")} variant="outline">Revisar compras <ShoppingCart /></Button><Button className="justify-between" onClick={() => onGo("retentions")} variant="outline">Revisar retenciones <ShieldCheck /></Button><Button className="justify-between" onClick={() => onGo("seniatForm")} variant="outline">Guía SENIAT (Forma 99030) <ReceiptText /></Button><Button className="justify-between" onClick={() => onGo("closing")} variant="outline">Registrar presentación <FileCheck2 /></Button></div></section><section className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-xs leading-5 text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"><p className="font-semibold">Regla aplicada · versión {data.case.ruleVersion}</p><p className="mt-1">{data.case.source || "La configuración no tiene una fuente visible en este expediente. Valídala antes de presentar."}</p></section></aside>
@@ -666,4 +668,15 @@ function SeniatAutoRow({ num, concept, box, val, strong = false, highlight = fal
       <TableCell className="px-4 text-right tabular-nums font-semibold">{money.format(val)}</TableCell>
     </TableRow>
   );
+}
+
+function EditableLine({ label, value, detail, strong = false, editableValue, onSave, closed }: { label: string; value: string; detail?: string; strong?: boolean; editableValue: string; onSave: (val: string) => void; closed: boolean }) {
+  const [editing, setEditing] = useState(false);
+  const [temp, setTemp] = useState(editableValue);
+
+  if (!editing || closed) {
+    return <div className={`flex items-start justify-between gap-5 py-3 group ${strong ? "text-base font-semibold" : "text-sm"}`}><div><p>{label}</p>{detail && <p className="mt-1 text-xs font-normal text-stone-500">{detail}</p>}</div><div className="flex items-center gap-2"><p className="shrink-0 text-right font-medium tabular-nums">{value}</p>{!closed && <button onClick={() => { setTemp(editableValue); setEditing(true); }} className="invisible group-hover:visible text-stone-400 hover:text-[#14352d] dark:hover:text-emerald-400"><Pencil size={14} /></button>}</div></div>;
+  }
+
+  return <div className={`flex items-center justify-between gap-5 py-2.5 ${strong ? "text-base font-semibold" : "text-sm"}`}><div><p>{label}</p>{detail && <p className="mt-1 text-xs font-normal text-stone-500">{detail}</p>}</div><div className="flex items-center gap-2"><Input type="text" inputMode="decimal" value={temp} onChange={(e) => setTemp(e.target.value)} className="w-28 text-right h-8" placeholder="0.00" /><Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => { onSave(temp); setEditing(false); }}><Check size={14} /></Button><Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setEditing(false)}><X size={14} /></Button></div></div>;
 }

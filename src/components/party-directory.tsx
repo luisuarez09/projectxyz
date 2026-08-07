@@ -1,5 +1,7 @@
 "use client";
 
+import { SeniatRifLookup } from "@/components/seniat-rif-lookup";
+
 import { AttachmentInput } from "@/components/ui/attachment-input";
 import { Button } from "@/components/ui/button";
 import {
@@ -322,7 +324,7 @@ function PartyFormDialog({ draft, editing, noun, primaryLabel, counterpartLabel,
       <div className="grid overflow-y-auto p-5 sm:grid-cols-2 gap-4">
     {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/30 dark:text-rose-200 sm:col-span-2">{error}</p>}
     <label className="text-sm font-medium sm:col-span-2">Nombre legal *<Input className="field mt-1.5" onChange={field("legalName")} value={draft.legalName} /></label>
-    <label className="text-sm font-medium">RIF *<div className="mt-1.5 flex gap-2"><Input className="field" onChange={(event) => onChange({ ...draft, rif: event.target.value.toUpperCase() })} value={draft.rif} /><Button disabled size="sm" variant="outline">Consultar SENIAT</Button></div><span className="mt-1 block text-xs font-normal text-stone-500">Verificación pendiente: el portal de SENIAT no está disponible para esta integración.</span></label>
+    <div className="text-sm font-medium">RIF *<Input className="field mt-1.5" onChange={(event) => onChange({ ...draft, rif: event.target.value.toUpperCase() })} value={draft.rif} /><SeniatRifLookup rif={draft.rif} onResult={({ legalName }) => onChange({ ...draft, legalName })} /></div>
     <label className="text-sm font-medium">Dirección fiscal<textarea className="field mt-1.5 h-22 py-2" onChange={field("fiscalAddress")} value={draft.fiscalAddress} /></label>
     <label className="text-sm font-medium">Correo<Input className="field mt-1.5" onChange={field("email")} type="email" value={draft.email} /></label>
     <label className="text-sm font-medium">Teléfono<Input className="field mt-1.5" onChange={field("phone")} value={draft.phone} /></label>

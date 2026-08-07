@@ -11,6 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { SeniatRifLookup } from "@/components/seniat-rif-lookup";
 import Link from "next/link";
 import {
   useCallback,
@@ -1718,6 +1719,12 @@ function QuickPartyModal({
               value={rif}
             />
           </Field>
+          <div className="sm:col-span-2">
+            <SeniatRifLookup
+              rif={rif}
+              onResult={({ legalName }) => setLegalName(legalName)}
+            />
+          </div>
           <Field label="Dirección fiscal">
             <Input
               className="field mt-1.5"

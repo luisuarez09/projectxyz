@@ -1648,10 +1648,10 @@ export async function createCommercialDocument(
       for (const retention of input.retentions) {
         if (
           retention.type === "IVA" &&
-          !/^\d{15}$/.test(retention.receiptNumber)
+          !/^\d{14}$/.test(retention.receiptNumber)
         )
           throw new CommercialConflictError(
-            "El comprobante de retención de IVA debe contener 15 dígitos.",
+            "El comprobante de retención de IVA debe contener 14 dígitos.",
           );
         if (
           retention.type === "IVA" &&

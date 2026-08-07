@@ -1881,7 +1881,7 @@ export async function voidCommercialDocument(
       throw new CommercialConflictError("El documento ya se encuentra anulado.");
     }
 
-    if (document.status === "DECLARED") {
+    if (document.declaredAt) {
       throw new CommercialConflictError("No es posible anular un documento declarado.");
     }
 

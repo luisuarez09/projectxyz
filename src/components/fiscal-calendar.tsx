@@ -58,6 +58,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { SimpleSelect } from "@/components/ui/simple-select";
+import { useCompanyContext } from "@/components/company-context";
 import { evidenceLabel } from "@/lib/evidence-requirements";
 import type {
   CalendarCaseView,
@@ -131,7 +132,8 @@ function formatDate(value: string) {
 export function FiscalCalendar({ initialPeriod, initialView = "due" }: { initialPeriod?: string; initialView?: CalendarViewMode }) {
   const [period, setPeriod] = useState(() => initialPeriod && /^\d{4}-(0[1-9]|1[0-2])$/.test(initialPeriod) ? initialPeriod : currentPeriod());
   const [viewMode, setViewMode] = useState<CalendarViewMode>(initialView);
-  const [companyId, setCompanyId] = useState("all");
+  const { activeCompanyId } = useCompanyContext();
+  const companyId = activeCompanyId ?? "all";
   const [data, setData] = useState<CalendarView | null>(null);
   const [selectedId, setSelectedId] = useState("");
   const [filter, setFilter] = useState<DeadlineFilter>("ALL");
@@ -296,17 +298,6 @@ export function FiscalCalendar({ initialPeriod, initialView = "due" }: { initial
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SimpleSelect
-            aria-label="Filtrar por empresa"
-            className="h-9 min-w-64"
-            onValueChange={setCompanyId}
-            value={companyId}
-          >
-            <option value="all">Todas las empresas</option>
-            {(data?.companies ?? []).map((company) => (
-              <option key={company.id} value={company.id}>{company.legalName}</option>
-            ))}
-          </SimpleSelect>
           <div className="flex items-center gap-2">
             <Button onClick={() => data && setPeriod(data.period.previous)} size="sm" variant="outline"><ChevronLeft /> Mes anterior</Button>
             <Button onClick={() => data && setPeriod(data.period.next)} size="sm" variant="outline"><span className="capitalize">{data?.period.label ?? period}</span><ChevronRight /></Button>

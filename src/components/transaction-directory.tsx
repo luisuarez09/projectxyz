@@ -417,31 +417,21 @@ function InvoiceTable({
         <TableBody className="divide-y divide-stone-100 dark:divide-stone-800">
           {rows.map((document) => (
             <TableRow
-              className={
-                document.status === "voided"
-                  ? ""
-                  : "cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-800/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#14352d]"
-              }
+              className="cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-800/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#14352d]"
               key={document.id}
               onClick={() => {
-                if (document.status !== "voided")
-                  router.push(
-                    `/operaciones/${isPurchase ? "compras" : "ventas"}/${document.id}/editar`,
-                  );
+                router.push(
+                  `/operaciones/${isPurchase ? "compras" : "ventas"}/${document.id}/editar`,
+                );
               }}
               onKeyDown={(event) => {
-                if (
-                  document.status !== "voided" &&
-                  (event.key === "Enter" || event.key === " ")
-                ) {
+                if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   router.push(
                     `/operaciones/${isPurchase ? "compras" : "ventas"}/${document.id}/editar`,
                   );
                 }
               }}
-              role={document.status === "voided" ? undefined : "link"}
-              tabIndex={document.status === "voided" ? undefined : 0}
             >
               <TableCell className="px-5 py-4">
                 <p className="font-semibold">{document.documentNumber}</p>

@@ -10,6 +10,7 @@ import {
   LoaderCircle,
   MonitorUp,
   TriangleAlert,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -20,15 +21,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { TvAutoRefresh } from "@/components/tv-auto-refresh";
 import type { CalendarCaseView, CalendarView } from "@/modules/calendar/domain/calendar";
 
-type CellStatus = "ok" | "soon" | "late" | "pending" | "na";
+type CellStatus = "ok" | "unpaid" | "soon" | "late" | "pending" | "na";
 type MatrixCell = { status: CellStatus; label: string; date: string };
 
 const completedStatuses = new Set(["SUBMITTED", "PAID", "CLOSED", "NOT_APPLICABLE"]);
+const fullyCompletedStatuses = new Set(["PAID", "CLOSED", "NOT_APPLICABLE"]);
+
 const statusStyle: Record<CellStatus, string> = {
   ok: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300",
   soon: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300",
   late: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300",
   pending: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300",
+  unpaid: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-300",
   na: "border-stone-200 bg-stone-50 text-stone-400 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-500",
 };
 
@@ -56,10 +60,15 @@ function cellFor(cases: CalendarCaseView[]): MatrixCell {
     return { status: "late", label: "Vencida", date: shortDate(cases.find(({ deadlineStatus }) => deadlineStatus === "OVERDUE")?.dueDate ?? "") };
   if (cases.some(({ deadlineStatus }) => deadlineStatus === "DUE_SOON"))
     return { status: "soon", label: "Por vencer", date: shortDate(cases.find(({ deadlineStatus }) => deadlineStatus === "DUE_SOON")?.dueDate ?? "") };
-  const complete = cases.filter(({ status }) => completedStatuses.has(status)).length;
-  if (complete === cases.length)
-    return { status: "ok", label: cases.length > 1 ? `${complete}/${cases.length} listas` : "Completada", date: shortDate(cases[0].dueDate) };
-  return { status: "pending", label: cases.length > 1 ? `${complete}/${cases.length} listas` : "Pendiente", date: shortDate(cases.find(({ status }) => !completedStatuses.has(status))?.dueDate ?? "") };
+  const fullyComplete = cases.filter(({ status }) => fullyCompletedStatuses.has(status)).length;
+  if (fullyComplete === cases.length)
+    return { status: "ok", label: cases.length > 1 ? `${fullyComplete}/${cases.length} listas` : "Completada", date: shortDate(cases[0].dueDate) };
+  
+  const declaredOrComplete = cases.filter(({ status }) => completedStatuses.has(status)).length;
+  if (declaredOrComplete === cases.length)
+    return { status: "unpaid", label: cases.length > 1 ? `${declaredOrComplete}/${cases.length} decl.` : "Pend. pago", date: shortDate(cases.find(({ status }) => status === "SUBMITTED")?.dueDate ?? cases[0].dueDate) };
+    
+  return { status: "pending", label: cases.length > 1 ? `${declaredOrComplete}/${cases.length} listas` : "Pendiente", date: shortDate(cases.find(({ status }) => !completedStatuses.has(status))?.dueDate ?? "") };
 }
 
 export function FiscalMatrix({ tv = false, initialPeriod }: { tv?: boolean; initialPeriod?: string }) {
@@ -105,7 +114,7 @@ export function FiscalMatrix({ tv = false, initialPeriod }: { tv?: boolean; init
   const incidents = (data?.cases ?? []).filter(({ deadlineStatus, status }) => deadlineStatus === "OVERDUE" || status === "INCIDENT").length;
 
   return (
-    <main className={tv ? "min-h-screen bg-[#0d211b] text-white" : "min-h-screen bg-[#f7f7f4] text-stone-900 dark:bg-stone-950 dark:text-stone-100"}>
+    <main className={tv ? "dark min-h-screen bg-[#0d211b] text-white" : "min-h-screen bg-[#f7f7f4] text-stone-900 dark:bg-stone-950 dark:text-stone-100"}>
       <div className={tv ? "max-w-none px-8 py-7" : "mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:px-10"}>
         <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
@@ -132,6 +141,7 @@ export function FiscalMatrix({ tv = false, initialPeriod }: { tv?: boolean; init
 
         <div className={`mt-6 flex flex-wrap items-center gap-4 text-xs font-medium ${tv ? "text-emerald-100" : "text-stone-600 dark:text-stone-300"}`}>
           <Legend color="bg-emerald-500" label="Completada" />
+          <Legend color="bg-violet-500" label="Pend. pago" />
           <Legend color="bg-sky-500" label="Pendiente" />
           <Legend color="bg-amber-500" label="Por vencer" />
           <Legend color="bg-rose-500" label="Vencida" />
@@ -162,7 +172,7 @@ export function FiscalMatrix({ tv = false, initialPeriod }: { tv?: boolean; init
   );
 }
 
-function MatrixMark({ cell }: { cell: MatrixCell }) { return <div className={`rounded-lg border px-2 py-2 text-center ${statusStyle[cell.status]}`}><p className="text-xs font-semibold">{cell.status === "ok" ? <Check className="mx-auto size-3.5" /> : cell.status === "late" ? <TriangleAlert className="mx-auto size-3.5" /> : cell.status === "soon" ? <Clock3 className="mx-auto size-3.5" /> : cell.status === "pending" ? <Circle className="mx-auto size-3.5" /> : "—"}</p><p className="mt-1 text-[10px] font-medium leading-none">{cell.date}</p><p className="mt-1 truncate text-[9px] opacity-80">{cell.label}</p></div>; }
+function MatrixMark({ cell }: { cell: MatrixCell }) { return <div className={`rounded-lg border px-2 py-2 text-center ${statusStyle[cell.status]}`}><p className="text-xs font-semibold">{cell.status === "ok" ? <Check className="mx-auto size-3.5" /> : cell.status === "late" ? <TriangleAlert className="mx-auto size-3.5" /> : cell.status === "soon" ? <Clock3 className="mx-auto size-3.5" /> : cell.status === "unpaid" ? <Wallet className="mx-auto size-3.5" /> : cell.status === "pending" ? <Circle className="mx-auto size-3.5" /> : "—"}</p><p className="mt-1 text-[10px] font-medium leading-none">{cell.date}</p><p className="mt-1 truncate text-[9px] opacity-80">{cell.label}</p></div>; }
 function Legend({ color, label }: { color: string; label: string }) { return <span className="flex items-center gap-1.5"><i className={`size-2 rounded-full ${color}`} />{label}</span>; }
 function Summary({ label, value, color, tv }: { label: string; value: string; color: "emerald" | "amber" | "rose" | "sky"; tv: boolean }) { const colors = { emerald: "text-emerald-500", amber: "text-amber-500", rose: "text-rose-500", sky: "text-sky-500" }; return <div className={`rounded-xl border p-4 ${tv ? "border-emerald-900 bg-[#102a22]" : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900"}`}><p className={`text-xs ${tv ? "text-emerald-200" : "text-stone-500"}`}>{label}</p><p className={`mt-1 text-2xl font-semibold ${colors[color]}`}>{value}</p></div>; }
 function Risk({ cells }: { cells: MatrixCell[] }) { const late = cells.filter(({ status }) => status === "late").length; const soon = cells.filter(({ status }) => status === "soon").length; const pending = cells.filter(({ status }) => status === "pending").length; return late ? <Badge className="border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-300" variant="outline">{late} vencida{late > 1 ? "s" : ""}</Badge> : soon ? <Badge className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300" variant="outline">{soon} próxima{soon > 1 ? "s" : ""}</Badge> : pending ? <Badge className="border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300" variant="outline">{pending} pendiente{pending > 1 ? "s" : ""}</Badge> : <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300" variant="outline">Al día</Badge>; }

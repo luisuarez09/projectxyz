@@ -181,6 +181,7 @@ export function CommercialInvoiceForm({
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editable, setEditable] = useState(true);
+  const [status, setStatus] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const itemCounter = useRef(1);
@@ -315,6 +316,7 @@ export function CommercialInvoiceForm({
         (candidate: Party) => candidate.id === detail.counterpartyId,
       ) ?? null;
     setEditable(detail.editable);
+    setStatus(detail.status);
     setSelectedParty(party);
     setPartyQuery(party?.legalName ?? "");
     setInvoiceNumber(detail.documentNumber);
@@ -631,23 +633,29 @@ export function CommercialInvoiceForm({
     setSaving(true);
     setError("");
     try {
+      const url = documentId ? "/api/commercial-documents/void" : "/api/commercial-documents/void-sale-number";
+      const payload = documentId ? { documentId, reason: voidReason } : { issueDate: date, reason: voidReason };
       const response = await fetch(
-        "/api/commercial-documents/void-sale-number",
+        url,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ issueDate: date, reason: voidReason }),
+          body: JSON.stringify(payload),
         },
       );
       const body = await response.json();
       if (!response.ok)
         throw new Error(body.error ?? "No fue posible anular el correlativo.");
       setNotice(
-        `El correlativo ${body.document.documentNumber} quedó anulado y no se reutilizará.`,
+        `El documento ${body.document.documentNumber} quedó anulado.`,
       );
       setVoidOpen(false);
       setVoidReason("");
-      await loadOptions();
+      if (documentId) {
+        window.location.assign("/operaciones/ventas");
+      } else {
+        await loadOptions();
+      }
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -659,8 +667,8 @@ export function CommercialInvoiceForm({
     }
   };
 
-  const deletePurchase = async () => {
-    if (!documentId || !editable || deleting) return;
+  const deleteDocument = async () => {
+    if (!documentId || (!editable && status !== "voided") || deleting) return;
     setDeleting(true);
     setError("");
     try {
@@ -670,13 +678,13 @@ export function CommercialInvoiceForm({
       );
       const body = await response.json();
       if (!response.ok)
-        throw new Error(body.error ?? "No fue posible eliminar la compra.");
-      window.location.assign("/operaciones/compras");
+        throw new Error(body.error ?? `No fue posible eliminar la ${isSale ? "venta" : "compra"}.`);
+      window.location.assign(isSale ? "/operaciones/ventas" : "/operaciones/compras");
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
-          : "No fue posible eliminar la compra.",
+          : `No fue posible eliminar la ${isSale ? "venta" : "compra"}.`,
       );
       setDeleteOpen(false);
     } finally {
@@ -725,7 +733,7 @@ export function CommercialInvoiceForm({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {documentId && !isSale && editable && (
+          {documentId && (editable || status === "voided") && (
             <Button
               className="border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
               disabled={saving || deleting}
@@ -733,7 +741,7 @@ export function CommercialInvoiceForm({
               type="button"
               variant="outline"
             >
-              <Trash2 size={16} /> Eliminar compra
+              <Trash2 size={16} /> {isSale ? "Eliminar factura" : "Eliminar compra"}
             </Button>
           )}
           <Button
@@ -875,7 +883,7 @@ export function CommercialInvoiceForm({
                     onClick={() => setVoidOpen(true)}
                     type="button"
                   >
-                    Anular este correlativo
+                    {documentId ? "Anular este documento" : "Anular este correlativo"}
                   </button>
                 )}
               </Field>
@@ -1409,7 +1417,7 @@ export function CommercialInvoiceForm({
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-semibold">
-                  Anular correlativo {invoiceNumber}
+                  {documentId ? `Anular documento ${invoiceNumber}` : `Anular correlativo ${invoiceNumber}`}
                 </h2>
                 <p className="mt-1 text-sm text-stone-500">
                   El número quedará visible en el historial y la próxima venta
@@ -1449,9 +1457,9 @@ export function CommercialInvoiceForm({
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="p-6 sm:max-w-md">
           <DialogHeader className="pr-8">
-            <DialogTitle className="text-lg font-semibold">¿Confirmar eliminación de compra?</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">¿Confirmar eliminación de {isSale ? "venta" : "compra"}?</DialogTitle>
             <DialogDescription className="mt-2 text-sm leading-relaxed text-stone-600 dark:text-stone-300">
-              Esta acción eliminará permanentemente la compra{" "}
+              Esta acción eliminará permanentemente la {isSale ? "venta" : "compra"}{" "}
               {invoiceNumber ? `N° ${invoiceNumber}` : ""} registrada y sus asientos
               contables. Esta operación no se puede deshacer.
             </DialogDescription>
@@ -1467,11 +1475,11 @@ export function CommercialInvoiceForm({
             </Button>
             <Button
               disabled={deleting}
-              onClick={() => void deletePurchase()}
+              onClick={() => void deleteDocument()}
               type="button"
               variant="destructive"
             >
-              {deleting ? "Eliminando…" : "Eliminar compra"}
+              {deleting ? "Eliminando…" : `Eliminar ${isSale ? "venta" : "compra"}`}
             </Button>
           </DialogFooter>
         </DialogContent>

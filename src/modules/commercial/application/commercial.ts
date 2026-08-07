@@ -1856,6 +1856,79 @@ export async function voidNextSalesInvoice(
   });
 }
 
+export async function voidCommercialDocument(
+  auth: AuthContext,
+  rawDocumentId: string,
+  rawReason: string,
+) {
+  requirePermission(auth, permissions.commercialDocumentsManage);
+  const companyId = activeCompanyId(auth);
+  const documentId = z.uuid().parse(rawDocumentId);
+  const reason = z.string().trim().min(5).max(500).parse(rawReason);
+
+  return withAuthTransaction(auth, async (transaction) => {
+    const document = await transaction.commercialDocument.findFirst({
+      where: { id: documentId, companyId },
+    });
+
+    if (!document) {
+      throw new CommercialNotFoundError(
+        "La factura no existe en la empresa activa.",
+      );
+    }
+
+    if (document.status === "VOIDED") {
+      throw new CommercialConflictError("El documento ya se encuentra anulado.");
+    }
+
+    if (document.status === "DECLARED") {
+      throw new CommercialConflictError("No es posible anular un documento declarado.");
+    }
+
+    await transaction.commercialDocumentItem.deleteMany({
+      where: { documentId },
+    });
+    await transaction.commercialAccountingEntry.deleteMany({
+      where: { documentId },
+    });
+    await transaction.commercialRetention.deleteMany({
+      where: { documentId },
+    });
+
+    const updated = await transaction.commercialDocument.update({
+      where: { id: documentId },
+      data: {
+        status: "VOIDED",
+        voidReason: reason,
+        counterpartyId: null,
+        taxableBase: 0,
+        exemptAmount: 0,
+        nonTaxableAmount: 0,
+        taxAmount: 0,
+        totalAmount: 0,
+        vatRate: null,
+        vatSource: null,
+        taxRateId: null,
+      },
+    });
+
+    await audit(
+      transaction,
+      auth,
+      "commercial.sale_number.voided",
+      "commercial_document",
+      updated.id,
+      {
+        companyId,
+        documentNumber: updated.documentNumber,
+        reason,
+      },
+    );
+
+    return serializeDocument(updated);
+  });
+}
+
 export async function deleteCommercialDocument(
   auth: AuthContext,
   rawDocumentId: string,
@@ -1880,19 +1953,15 @@ export async function deleteCommercialDocument(
       );
     }
 
-    if (document.type !== "PURCHASE") {
-      throw new CommercialConflictError(
-        "Solo las compras pueden ser eliminadas.",
-      );
-    }
+
 
     if (
-      document.status !== "REGISTERED" ||
+      (document.status !== "REGISTERED" && document.status !== "VOIDED") ||
       document.declaredAt ||
       document.ivaDeclarations.length > 0
     ) {
       throw new CommercialConflictError(
-        "La compra ya fue declarada en el IVA o anulada y no puede ser eliminada.",
+        "El documento ya fue declarado en el IVA y no puede ser eliminado.",
       );
     }
 
